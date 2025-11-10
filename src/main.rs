@@ -1,18 +1,26 @@
 mod entities;
 
 use color_eyre::Result;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::{
+    event::{
+        self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, KeyboardEnhancementFlags,
+        PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+    },
+    execute, queue,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
 use rand::Rng;
 use ratatui::{
-    DefaultTerminal, Frame,
+    backend::CrosstermBackend,
+    Frame, Terminal,
     layout::{Alignment, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
-use std::fs::OpenOptions;
 use std::io::Write;
 use std::time::Duration;
+use std::{fs::OpenOptions, io::stdout};
 
 use entities::{Enemy, EnemyType, GameState, Player, Projectile, ProjectileOwner};
 
@@ -27,9 +35,55 @@ struct KeyState {
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
-    let terminal = ratatui::init();
-    let result = App::new().run(terminal);
-    ratatui::restore();
+
+    let supports_keyboard_enhancement = matches!(
+        crossterm::terminal::supports_keyboard_enhancement(),
+        Ok(true)
+    );
+
+    // Debug: Log keyboard enhancement support
+    let mut debug_file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open("debug.log")?;
+    writeln!(debug_file, "Keyboard enhancement supported: {}", supports_keyboard_enhancement)?;
+
+    // Setup terminal manually for full control
+    enable_raw_mode()?;
+    let mut stdout = stdout();
+    execute!(stdout, EnterAlternateScreen)?;
+
+    // Enable keyboard enhancement AFTER entering alternate screen
+    if supports_keyboard_enhancement {
+        execute!(
+            stdout,
+            PushKeyboardEnhancementFlags(
+                KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+                    | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+            )
+        )?;
+        writeln!(debug_file, "Keyboard enhancement flags pushed")?;
+    }
+
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+
+    let result = App::new().run(&mut terminal);
+
+    // Cleanup
+    disable_raw_mode()?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen
+    )?;
+
+    if supports_keyboard_enhancement {
+        execute!(terminal.backend_mut(), PopKeyboardEnhancementFlags)?;
+    }
+
+    terminal.show_cursor()?;
+
     result
 }
 
@@ -78,7 +132,7 @@ impl App {
     }
 
     /// Run the application's main loop.
-    pub fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
+    pub fn run(mut self, terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>) -> Result<()> {
         while self.running {
             terminal.draw(|frame| self.render(frame))?;
             self.handle_crossterm_events()?;
@@ -467,21 +521,18 @@ impl App {
 
     /// Reads the crossterm events and updates the state of [`App`].
     fn handle_crossterm_events(&mut self) -> Result<()> {
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("debug.log")
+            .unwrap();
+
         // Process all available events without blocking for responsive input
         while event::poll(Duration::from_millis(0))? {
             match event::read()? {
                 Event::Key(key) => {
-                    let mut file = OpenOptions::new()
-                        .create(true)
-                        .append(true)
-                        .open("debug.log")
-                        .unwrap();
-                    writeln!(file, "Key event: {:?}", key).unwrap();
-                    match key.kind {
-                        KeyEventKind::Press => self.on_key_press(key),
-                        KeyEventKind::Release => self.on_key_release(key),
-                        _ => {}
-                    }
+                    writeln!(file, "EVENT RECEIVED: {:?} kind: {:?}", key.code, key.kind).unwrap();
+                    self.on_key_event(key);
                 }
                 Event::Mouse(_) => {}
                 Event::Resize(_, _) => {}
@@ -500,25 +551,12 @@ impl App {
         Ok(())
     }
 
-    /// Handles key press events
-    fn on_key_press(&mut self, key: KeyEvent) {
+    /// Handles key events (both press and release)
+    fn on_key_event(&mut self, key: KeyEvent) {
         match self.game_state {
-            GameState::Playing => self.handle_playing_key_press(key),
+            GameState::Playing => self.handle_playing_keys(key),
             GameState::Paused => self.handle_paused_keys(key),
             GameState::GameOver => self.handle_game_over_keys(key),
-        }
-    }
-
-    /// Handles key release events
-    fn on_key_release(&mut self, key: KeyEvent) {
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("debug.log")
-            .unwrap();
-        writeln!(file, "Key release: {:?}", key).unwrap();
-        if self.game_state == GameState::Playing {
-            self.handle_playing_key_release(key);
         }
     }
 
@@ -555,108 +593,131 @@ impl App {
         }
     }
 
-    fn handle_playing_key_press(&mut self, key: KeyEvent) {
-        match (key.modifiers, key.code) {
-            // Quit
-            (_, KeyCode::Char('q') | KeyCode::Esc)
-            | (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => self.quit(),
-
-            // Pause
-            (_, KeyCode::Char('p') | KeyCode::Char('P')) => {
-                self.game_state = GameState::Paused;
-            }
-
-            // Movement - Left
-            (_, KeyCode::Left | KeyCode::Char('a') | KeyCode::Char('A')) => {
-                self.keys.left = true;
-                self.keys.right = false; // Clear opposite direction
-            }
-
-            // Movement - Right
-            (_, KeyCode::Right | KeyCode::Char('d') | KeyCode::Char('D')) => {
-                self.keys.right = true;
-                self.keys.left = false; // Clear opposite direction
-            }
-
-            // Movement - Up
-            (_, KeyCode::Up | KeyCode::Char('w') | KeyCode::Char('W')) => {
-                self.keys.up = true;
-                self.keys.down = false; // Clear opposite direction
-            }
-
-            // Movement - Down
-            (_, KeyCode::Down | KeyCode::Char('s') | KeyCode::Char('S')) => {
-                self.keys.down = true;
-                self.keys.up = false; // Clear opposite direction
-            }
-
-            // Fire
-            (_, KeyCode::Char(' ')) => {
-                self.keys.fire = true;
-            }
-
-            _ => {}
-        }
-    }
-
-    fn handle_playing_key_release(&mut self, key: KeyEvent) {
+    fn handle_playing_keys(&mut self, key: KeyEvent) {
         let mut file = OpenOptions::new()
             .create(true)
             .append(true)
             .open("debug.log")
             .unwrap();
-        writeln!(
-            file,
-            "Before release - left:{} right:{} up:{} down:{}",
-            self.keys.left, self.keys.right, self.keys.up, self.keys.down
-        )
-        .unwrap();
-        match key.code {
-            // Movement - Left
-            KeyCode::Left => {
-                self.keys.left = false;
-            }
-            KeyCode::Char('a' | 'A') => {
-                self.keys.left = false;
-            }
 
-            // Movement - Right
-            KeyCode::Right => {
-                self.keys.right = false;
-            }
-            KeyCode::Char('d' | 'D') => {
-                self.keys.right = false;
-            }
+        writeln!(file, "Key event: {:?} kind: {:?}", key.code, key.kind).unwrap();
 
-            // Movement - Up
-            KeyCode::Up => {
-                self.keys.up = false;
-            }
-            KeyCode::Char('w' | 'W') => {
-                self.keys.up = false;
-            }
+        match key.kind {
+            KeyEventKind::Press => {
+                match (key.modifiers, key.code) {
+                    // Quit
+                    (_, KeyCode::Char('q') | KeyCode::Esc)
+                    | (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => {
+                        self.quit()
+                    }
 
-            // Movement - Down
-            KeyCode::Down => {
-                self.keys.down = false;
-            }
-            KeyCode::Char('s' | 'S') => {
-                self.keys.down = false;
-            }
+                    // Pause
+                    (_, KeyCode::Char('p') | KeyCode::Char('P')) => {
+                        self.game_state = GameState::Paused;
+                    }
 
-            // Fire
-            KeyCode::Char(' ') => {
-                self.keys.fire = false;
-            }
+                    // Movement - Left
+                    (_, KeyCode::Left | KeyCode::Char('a') | KeyCode::Char('A')) => {
+                        self.keys.left = true;
+                        self.keys.right = false; // Clear opposite direction
+                        writeln!(
+                            file,
+                            "Press LEFT - keys: left={} right={} up={} down={}",
+                            self.keys.left, self.keys.right, self.keys.up, self.keys.down
+                        )
+                        .unwrap();
+                    }
 
+                    // Movement - Right
+                    (_, KeyCode::Right | KeyCode::Char('d') | KeyCode::Char('D')) => {
+                        self.keys.left = false; // Clear opposite direction
+                        self.keys.right = true;
+                        writeln!(
+                            file,
+                            "Press RIGHT - keys: left={} right={} up={} down={}",
+                            self.keys.left, self.keys.right, self.keys.up, self.keys.down
+                        )
+                        .unwrap();
+                    }
+
+                    // Movement - Up
+                    (_, KeyCode::Up | KeyCode::Char('w') | KeyCode::Char('W')) => {
+                        self.keys.down = false; // Clear opposite direction
+                        self.keys.up = true;
+                        writeln!(
+                            file,
+                            "Press UP - keys: left={} right={} up={} down={}",
+                            self.keys.left, self.keys.right, self.keys.up, self.keys.down
+                        )
+                        .unwrap();
+                    }
+
+                    // Movement - Down
+                    (_, KeyCode::Down | KeyCode::Char('s') | KeyCode::Char('S')) => {
+                        self.keys.up = false; // Clear opposite direction
+                        self.keys.down = true;
+                        writeln!(
+                            file,
+                            "Press DOWN - keys: left={} right={} up={} down={}",
+                            self.keys.left, self.keys.right, self.keys.up, self.keys.down
+                        )
+                        .unwrap();
+                    }
+
+                    // Fire
+                    (_, KeyCode::Char(' ')) => {
+                        self.keys.fire = true;
+                    }
+
+                    _ => {}
+                }
+            }
+            KeyEventKind::Release => {
+                writeln!(
+                    file,
+                    "Before release - left:{} right:{} up:{} down:{}",
+                    self.keys.left, self.keys.right, self.keys.up, self.keys.down
+                )
+                .unwrap();
+
+                match key.code {
+                    // Movement - Left
+                    KeyCode::Left | KeyCode::Char('a') | KeyCode::Char('A') => {
+                        self.keys.left = false;
+                    }
+
+                    // Movement - Right
+                    KeyCode::Right | KeyCode::Char('d') | KeyCode::Char('D') => {
+                        self.keys.right = false;
+                    }
+
+                    // Movement - Up
+                    KeyCode::Up | KeyCode::Char('w') | KeyCode::Char('W') => {
+                        self.keys.up = false;
+                    }
+
+                    // Movement - Down
+                    KeyCode::Down | KeyCode::Char('s') | KeyCode::Char('S') => {
+                        self.keys.down = false;
+                    }
+
+                    // Fire
+                    KeyCode::Char(' ') => {
+                        self.keys.fire = false;
+                    }
+
+                    _ => {}
+                }
+
+                writeln!(
+                    file,
+                    "After release - left:{} right:{} up:{} down:{}",
+                    self.keys.left, self.keys.right, self.keys.up, self.keys.down
+                )
+                .unwrap();
+            }
             _ => {}
         }
-        writeln!(
-            file,
-            "After release - left:{} right:{} up:{} down:{}",
-            self.keys.left, self.keys.right, self.keys.up, self.keys.down
-        )
-        .unwrap();
     }
 
     fn handle_paused_keys(&mut self, key: KeyEvent) {
