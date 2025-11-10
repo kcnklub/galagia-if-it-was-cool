@@ -71,10 +71,6 @@ impl Player {
         self.health > 0
     }
 
-    pub fn get_sprite(&self) -> &'static str {
-        " /^\\ \n<|||>\n ||| "
-    }
-
     pub fn get_sprite_lines(&self) -> Vec<&'static str> {
         vec![" /^\\ ", "<|||>", " ||| "]
     }
@@ -155,14 +151,6 @@ impl Enemy {
         self.health > 0
     }
 
-    pub fn get_sprite(&self) -> &'static str {
-        match self.enemy_type {
-            EnemyType::Basic => " \\|/ \n{===}\n /_\\ ",
-            EnemyType::Fast => " <> \n<||>\n <> ",
-            EnemyType::Tank => "[===]\n|###|\n[===]",
-        }
-    }
-
     pub fn get_sprite_lines(&self) -> Vec<&'static str> {
         match self.enemy_type {
             EnemyType::Basic => vec!["  \\|/  ", " {===} ", "  /_\\  "],
@@ -232,12 +220,5 @@ impl Projectile {
 
     pub fn is_out_of_bounds(&self, max_y: u16) -> bool {
         self.y == 0 || self.y >= max_y
-    }
-
-    pub fn get_sprite(&self) -> char {
-        match self.owner {
-            ProjectileOwner::Player => '^',
-            ProjectileOwner::Enemy => 'v',
-        }
     }
 }

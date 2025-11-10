@@ -6,13 +6,13 @@ use crossterm::{
         self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, KeyboardEnhancementFlags,
         PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
     },
-    execute, queue,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    execute,
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use rand::Rng;
 use ratatui::{
-    backend::CrosstermBackend,
     Frame, Terminal,
+    backend::CrosstermBackend,
     layout::{Alignment, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
@@ -47,7 +47,11 @@ fn main() -> color_eyre::Result<()> {
         .write(true)
         .truncate(true)
         .open("debug.log")?;
-    writeln!(debug_file, "Keyboard enhancement supported: {}", supports_keyboard_enhancement)?;
+    writeln!(
+        debug_file,
+        "Keyboard enhancement supported: {}",
+        supports_keyboard_enhancement
+    )?;
 
     // Setup terminal manually for full control
     enable_raw_mode()?;
@@ -73,10 +77,7 @@ fn main() -> color_eyre::Result<()> {
 
     // Cleanup
     disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen
-    )?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
 
     if supports_keyboard_enhancement {
         execute!(terminal.backend_mut(), PopKeyboardEnhancementFlags)?;
