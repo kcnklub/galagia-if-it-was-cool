@@ -82,6 +82,21 @@ impl Player {
     pub fn get_height(&self) -> u16 {
         3
     }
+
+    /// Attempts to fire a projectile if cooldown allows
+    /// Returns Some(Projectile) if fire was successful, None otherwise
+    pub fn try_fire(&mut self) -> Option<Projectile> {
+        if self.can_fire() {
+            self.reset_cooldown();
+            Some(Projectile::new(
+                self.x + self.get_width() / 2,
+                self.y,
+                ProjectileOwner::Player,
+            ))
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
