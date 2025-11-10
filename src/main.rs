@@ -1,5 +1,6 @@
 mod entities;
 mod input;
+mod renderer;
 
 use color_eyre::Result;
 use crossterm::{
@@ -8,20 +9,14 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use rand::Rng;
-use ratatui::{
-    Frame, Terminal,
-    backend::CrosstermBackend,
-    layout::{Alignment, Rect},
-    style::{Color, Modifier, Style, Stylize},
-    text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
-};
+use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io::Write;
 use std::time::Duration;
 use std::{fs::OpenOptions, io::stdout};
 
 use entities::{Enemy, EnemyType, GameState, Player, Projectile, ProjectileOwner};
 use input::{InputAction, InputManager};
+use renderer::{GameRenderer, RenderView};
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
@@ -99,6 +94,8 @@ pub struct App {
     screen_height: u16,
     /// Input manager
     input_manager: InputManager,
+    /// Renderer
+    renderer: GameRenderer,
 }
 
 impl App {
@@ -119,13 +116,31 @@ impl App {
             screen_width,
             screen_height,
             input_manager: InputManager::new(),
+            renderer: GameRenderer::new(),
         }
     }
 
     /// Run the application's main loop.
     pub fn run(mut self, terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>) -> Result<()> {
         while self.running {
-            terminal.draw(|frame| self.render(frame))?;
+            // Update screen dimensions before rendering
+            let area = terminal.size()?;
+            self.screen_width = area.width;
+            self.screen_height = area.height;
+
+            // Render the frame
+            terminal.draw(|frame| {
+                let view = RenderView {
+                    game_state: self.game_state,
+                    player: &self.player,
+                    enemies: &self.enemies,
+                    projectiles: &self.projectiles,
+                    score: self.score,
+                    frame_count: self.frame_count,
+                    area: frame.area(),
+                };
+                self.renderer.render(frame, &view);
+            })?;
 
             // Poll input events and get actions
             self.input_manager.poll_events(&self.game_state)?;
@@ -338,227 +353,5 @@ impl App {
                 self.enemies.remove(idx);
             }
         }
-    }
-
-    /// Renders the user interface.
-    fn render(&mut self, frame: &mut Frame) {
-        let area = frame.area();
-
-        // Update screen dimensions based on actual terminal size
-        self.screen_width = area.width;
-        self.screen_height = area.height;
-
-        match self.game_state {
-            GameState::Playing => self.render_game(frame, area),
-            GameState::Paused => self.render_paused(frame, area),
-            GameState::GameOver => self.render_game_over(frame, area),
-        }
-    }
-
-    fn render_game(&self, frame: &mut Frame, area: Rect) {
-        // Use the entire area for the game
-        let inner = area;
-
-        // Render stars (simple background)
-        if self.frame_count % 10 < 5 {
-            let star_text = (0..inner.height)
-                .map(|_| {
-                    let mut rng = rand::thread_rng();
-                    if rng.gen_bool(0.05) { "." } else { " " }
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
-            frame.render_widget(
-                Paragraph::new(star_text).style(Style::default().fg(Color::DarkGray)),
-                inner,
-            );
-        }
-
-        // Render player
-        if self.player.is_alive() {
-            let sprite_lines = self.player.get_sprite_lines();
-            let player_width = self.player.get_width();
-
-            for (i, line) in sprite_lines.iter().enumerate() {
-                let y_pos = self.player.y + i as u16;
-                if y_pos < inner.height && self.player.x + player_width < inner.width {
-                    let player_area = Rect {
-                        x: inner.x + self.player.x,
-                        y: inner.y + y_pos,
-                        width: player_width,
-                        height: 1,
-                    };
-                    frame.render_widget(
-                        Paragraph::new(*line).style(
-                            Style::default()
-                                .fg(Color::Green)
-                                .add_modifier(Modifier::BOLD),
-                        ),
-                        player_area,
-                    );
-                }
-            }
-        }
-
-        // Render enemies
-        for enemy in &self.enemies {
-            let sprite_lines = enemy.get_sprite_lines();
-            let enemy_width = enemy.get_width();
-            let color = match enemy.enemy_type {
-                EnemyType::Basic => Color::Red,
-                EnemyType::Fast => Color::Magenta,
-                EnemyType::Tank => Color::Yellow,
-            };
-
-            for (i, line) in sprite_lines.iter().enumerate() {
-                let y_pos = enemy.y + i as u16;
-                if y_pos < inner.height && enemy.x + enemy_width < inner.width {
-                    let enemy_area = Rect {
-                        x: inner.x + enemy.x,
-                        y: inner.y + y_pos,
-                        width: enemy_width,
-                        height: 1,
-                    };
-                    frame.render_widget(
-                        Paragraph::new(*line)
-                            .style(Style::default().fg(color).add_modifier(Modifier::BOLD)),
-                        enemy_area,
-                    );
-                }
-            }
-        }
-
-        // Render projectiles
-        for projectile in &self.projectiles {
-            if projectile.x < inner.width && projectile.y < inner.height {
-                let proj_area = Rect {
-                    x: inner.x + projectile.x,
-                    y: inner.y + projectile.y,
-                    width: 1,
-                    height: 1,
-                };
-                let (char, color) = match projectile.owner {
-                    ProjectileOwner::Player => ('|', Color::Yellow),
-                    ProjectileOwner::Enemy => ('!', Color::Magenta),
-                };
-                frame.render_widget(
-                    Paragraph::new(char.to_string()).style(Style::default().fg(color)),
-                    proj_area,
-                );
-            }
-        }
-
-        // Stats overlay at the top
-        let stats_left = Line::from(vec![
-            Span::styled("Score: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                format!("{}", self.score),
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled("  HP: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                format!("{}%", self.player.health),
-                if self.player.health > 50 {
-                    Style::default()
-                        .fg(Color::Green)
-                        .add_modifier(Modifier::BOLD)
-                } else if self.player.health > 25 {
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
-                },
-            ),
-            Span::styled("  Enemies: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                format!("{}", self.enemies.len()),
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]);
-
-        let stats_area = Rect {
-            x: area.x + 1,
-            y: area.y,
-            width: area.width.saturating_sub(2),
-            height: 1,
-        };
-
-        frame.render_widget(Paragraph::new(stats_left), stats_area);
-
-        // Controls hint at bottom
-        let controls = Line::from(vec![Span::styled(
-            "[WASD/Arrows: Move] [Space: Fire] [P: Pause] [Q: Quit]",
-            Style::default().fg(Color::DarkGray),
-        )]);
-
-        let controls_area = Rect {
-            x: area.x + 1,
-            y: area.y + area.height.saturating_sub(1),
-            width: area.width.saturating_sub(2),
-            height: 1,
-        };
-
-        frame.render_widget(Paragraph::new(controls).centered(), controls_area);
-    }
-
-    fn render_paused(&self, frame: &mut Frame, area: Rect) {
-        self.render_game(frame, area);
-
-        let pause_text = vec![
-            Line::from(""),
-            Line::from("PAUSED").centered().bold().yellow(),
-            Line::from(""),
-            Line::from("Press P to resume").centered().white(),
-        ];
-
-        let pause_area = Rect {
-            x: area.width / 2 - 15,
-            y: area.height / 2 - 3,
-            width: 30,
-            height: 6,
-        };
-
-        frame.render_widget(
-            Paragraph::new(pause_text)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .border_style(Style::default().fg(Color::Yellow)),
-                )
-                .alignment(Alignment::Center),
-            pause_area,
-        );
-    }
-
-    fn render_game_over(&self, frame: &mut Frame, area: Rect) {
-        let game_over_text = vec![
-            Line::from(""),
-            Line::from("╔═══════════════════════════╗").centered().red(),
-            Line::from("║      GAME OVER!           ║")
-                .centered()
-                .red()
-                .bold(),
-            Line::from("╚═══════════════════════════╝").centered().red(),
-            Line::from(""),
-            Line::from(format!("Final Score: {}", self.score))
-                .centered()
-                .yellow()
-                .bold(),
-            Line::from(""),
-            Line::from("Press R to restart").centered().white(),
-            Line::from("Press Q to quit").centered().white(),
-        ];
-
-        frame.render_widget(
-            Paragraph::new(game_over_text)
-                .block(Block::default().borders(Borders::ALL))
-                .alignment(Alignment::Center),
-            area,
-        );
     }
 }
