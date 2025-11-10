@@ -14,7 +14,7 @@ use std::io::Write;
 use std::time::Duration;
 use std::{fs::OpenOptions, io::stdout};
 
-use entities::{Enemy, EnemyType, GameState, Player, Projectile, ProjectileOwner};
+use entities::{Enemy, EnemyType, GameState, Pickup, Player, Projectile, ProjectileOwner, WeaponType};
 use input::{InputAction, InputManager};
 use renderer::{GameRenderer, RenderView};
 
@@ -85,6 +85,8 @@ pub struct App {
     enemies: Vec<Enemy>,
     /// Projectiles (from player and enemies)
     projectiles: Vec<Projectile>,
+    /// Weapon pickups
+    pickups: Vec<Pickup>,
     /// Player score
     score: u32,
     /// Frame counter for timing
@@ -111,6 +113,7 @@ impl App {
             player: Player::new(screen_width / 2, screen_height - 5),
             enemies: Vec::new(),
             projectiles: Vec::new(),
+            pickups: Vec::new(),
             score: 0,
             frame_count: 0,
             screen_width,
@@ -135,6 +138,7 @@ impl App {
                     player: &self.player,
                     enemies: &self.enemies,
                     projectiles: &self.projectiles,
+                    pickups: &self.pickups,
                     score: self.score,
                     frame_count: self.frame_count,
                     area: frame.area(),
@@ -195,9 +199,8 @@ impl App {
                     self.player.move_down(max_y);
                 }
                 InputAction::Fire => {
-                    if let Some(projectile) = self.player.try_fire() {
-                        self.projectiles.push(projectile);
-                    }
+                    let new_projectiles = self.player.try_fire();
+                    self.projectiles.extend(new_projectiles);
                 }
             }
         }
@@ -222,7 +225,7 @@ impl App {
 
         // Remove out-of-bounds projectiles
         self.projectiles
-            .retain(|p| !p.is_out_of_bounds(self.screen_height));
+            .retain(|p| !p.is_out_of_bounds(self.screen_width, self.screen_height));
 
         // Update enemies
         for enemy in &mut self.enemies {
@@ -242,6 +245,19 @@ impl App {
 
         // Remove enemies that went off screen
         self.enemies.retain(|e| e.y < self.screen_height);
+
+        // Spawn pickups more frequently (50% chance every 180 frames ~ every 3 seconds)
+        if self.frame_count % 180 == 0 && rand::thread_rng().gen_bool(0.5) {
+            self.spawn_pickup();
+        }
+
+        // Update pickups
+        for pickup in &mut self.pickups {
+            pickup.update();
+        }
+
+        // Remove out-of-bounds pickups
+        self.pickups.retain(|p| !p.is_out_of_bounds(self.screen_height));
 
         // Check collisions
         self.check_collisions();
@@ -268,6 +284,22 @@ impl App {
         let x = rng.gen_range(1..self.screen_width.saturating_sub(enemy_width + 1));
 
         self.enemies.push(Enemy::new(x, 2, enemy_type));
+    }
+
+    fn spawn_pickup(&mut self) {
+        let mut rng = rand::thread_rng();
+
+        // Randomly select a weapon type
+        let weapon_type = match rng.gen_range(0..3) {
+            0 => WeaponType::BasicGun,
+            1 => WeaponType::Sword,
+            _ => WeaponType::Bug,
+        };
+
+        // Spawn at random x position near top of screen
+        let x = rng.gen_range(5..self.screen_width.saturating_sub(5));
+
+        self.pickups.push(Pickup::new(x, 3, weapon_type));
     }
 
     fn check_collisions(&mut self) {
@@ -351,6 +383,35 @@ impl App {
         for idx in enemies_to_remove {
             if idx < self.enemies.len() {
                 self.enemies.remove(idx);
+            }
+        }
+
+        // Player collecting pickups
+        let mut pickups_to_remove = Vec::new();
+        for (idx, pickup) in self.pickups.iter().enumerate() {
+            let player_width = self.player.get_width();
+            let player_height = self.player.get_height();
+            let pickup_width = pickup.get_width();
+            let pickup_height = pickup.get_height();
+
+            // Check if bounding boxes overlap
+            if pickup.x < self.player.x + player_width
+                && pickup.x + pickup_width > self.player.x
+                && pickup.y < self.player.y + player_height
+                && pickup.y + pickup_height > self.player.y
+            {
+                self.player.change_weapon(pickup.weapon_type);
+                pickups_to_remove.push(idx);
+            }
+        }
+
+        // Remove collected pickups
+        pickups_to_remove.sort_unstable();
+        pickups_to_remove.reverse();
+        pickups_to_remove.dedup();
+        for idx in pickups_to_remove {
+            if idx < self.pickups.len() {
+                self.pickups.remove(idx);
             }
         }
     }

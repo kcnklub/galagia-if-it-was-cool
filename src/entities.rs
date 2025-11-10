@@ -7,12 +7,30 @@ pub enum GameState {
     GameOver,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum WeaponType {
+    BasicGun,
+    Sword,
+    Bug,
+}
+
+impl WeaponType {
+    pub fn get_name(&self) -> &'static str {
+        match self {
+            WeaponType::BasicGun => "Basic Gun",
+            WeaponType::Sword => "Sword",
+            WeaponType::Bug => "Bug",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Player {
     pub x: u16,
     pub y: u16,
     pub health: u8,
     pub fire_cooldown: u8,
+    pub current_weapon: WeaponType,
 }
 
 impl Player {
@@ -22,6 +40,7 @@ impl Player {
             y,
             health: 100,
             fire_cooldown: 0,
+            current_weapon: WeaponType::BasicGun,
         }
     }
 
@@ -83,19 +102,68 @@ impl Player {
         3
     }
 
-    /// Attempts to fire a projectile if cooldown allows
-    /// Returns Some(Projectile) if fire was successful, None otherwise
-    pub fn try_fire(&mut self) -> Option<Projectile> {
-        if self.can_fire() {
-            self.reset_cooldown();
-            Some(Projectile::new(
-                self.x + self.get_width() / 2,
-                self.y,
-                ProjectileOwner::Player,
-            ))
-        } else {
-            None
+    /// Attempts to fire projectile(s) if cooldown allows
+    /// Returns Vec of projectiles if fire was successful, empty vec otherwise
+    pub fn try_fire(&mut self) -> Vec<Projectile> {
+        if !self.can_fire() {
+            return vec![];
         }
+
+        self.reset_cooldown();
+        let center_x = self.x + self.get_width() / 2;
+        let fire_y = self.y;
+
+        match self.current_weapon {
+            WeaponType::BasicGun => {
+                // Single straight shot
+                vec![Projectile::new_with_type(
+                    center_x,
+                    fire_y,
+                    ProjectileOwner::Player,
+                    ProjectileType::Bullet,
+                    0,
+                    None,
+                )]
+            }
+            WeaponType::Sword => {
+                // Arc slash in front of ship with limited lifetime
+                vec![Projectile::new_with_type(
+                    center_x,
+                    fire_y.saturating_sub(1),
+                    ProjectileOwner::Player,
+                    ProjectileType::Slash,
+                    0,
+                    Some(10), // Slash lasts 10 frames
+                )]
+            }
+            WeaponType::Bug => {
+                // Dual angled shots in V-pattern
+                vec![
+                    // Left diagonal shot
+                    Projectile::new_with_type(
+                        center_x,
+                        fire_y,
+                        ProjectileOwner::Player,
+                        ProjectileType::BugShot,
+                        -1, // Move left
+                        None,
+                    ),
+                    // Right diagonal shot
+                    Projectile::new_with_type(
+                        center_x,
+                        fire_y,
+                        ProjectileOwner::Player,
+                        ProjectileType::BugShot,
+                        1, // Move right
+                        None,
+                    ),
+                ]
+            }
+        }
+    }
+
+    pub fn change_weapon(&mut self, weapon_type: WeaponType) {
+        self.current_weapon = weapon_type;
     }
 }
 
@@ -197,12 +265,22 @@ pub enum ProjectileOwner {
     Enemy,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ProjectileType {
+    Bullet,
+    Slash,
+    BugShot,
+}
+
 #[derive(Debug, Clone)]
 pub struct Projectile {
     pub x: u16,
     pub y: u16,
     pub owner: ProjectileOwner,
     pub damage: u8,
+    pub projectile_type: ProjectileType,
+    pub velocity_x: i16,
+    pub lifetime: Option<u8>,
 }
 
 impl Projectile {
@@ -217,10 +295,45 @@ impl Projectile {
             y,
             owner,
             damage,
+            projectile_type: ProjectileType::Bullet,
+            velocity_x: 0,
+            lifetime: None,
+        }
+    }
+
+    pub fn new_with_type(
+        x: u16,
+        y: u16,
+        owner: ProjectileOwner,
+        projectile_type: ProjectileType,
+        velocity_x: i16,
+        lifetime: Option<u8>,
+    ) -> Self {
+        let damage = match owner {
+            ProjectileOwner::Player => 10,
+            ProjectileOwner::Enemy => 10,
+        };
+
+        Self {
+            x,
+            y,
+            owner,
+            damage,
+            projectile_type,
+            velocity_x,
+            lifetime,
         }
     }
 
     pub fn update(&mut self) {
+        // Update lifetime
+        if let Some(ref mut lifetime) = self.lifetime {
+            if *lifetime > 0 {
+                *lifetime -= 1;
+            }
+        }
+
+        // Update vertical position
         match self.owner {
             ProjectileOwner::Player => {
                 if self.y > 0 {
@@ -231,9 +344,72 @@ impl Projectile {
                 self.y += 1;
             }
         }
+
+        // Update horizontal position based on velocity
+        if self.velocity_x != 0 {
+            let new_x = self.x as i16 + self.velocity_x;
+            if new_x >= 0 {
+                self.x = new_x as u16;
+            }
+        }
+    }
+
+    pub fn is_out_of_bounds(&self, max_x: u16, max_y: u16) -> bool {
+        // Check if lifetime expired
+        if let Some(lifetime) = self.lifetime {
+            if lifetime == 0 {
+                return true;
+            }
+        }
+
+        // Check bounds
+        self.y == 0 || self.y >= max_y || self.x >= max_x
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Pickup {
+    pub x: u16,
+    pub y: u16,
+    pub weapon_type: WeaponType,
+    pub frame_counter: u8,
+}
+
+impl Pickup {
+    pub fn new(x: u16, y: u16, weapon_type: WeaponType) -> Self {
+        Self {
+            x,
+            y,
+            weapon_type,
+            frame_counter: 0,
+        }
+    }
+
+    pub fn update(&mut self) {
+        // Pickups fall down very slowly (every 15 frames)
+        self.frame_counter = self.frame_counter.wrapping_add(1);
+        if self.frame_counter % 15 == 0 {
+            self.y += 1;
+        }
     }
 
     pub fn is_out_of_bounds(&self, max_y: u16) -> bool {
-        self.y == 0 || self.y >= max_y
+        self.y >= max_y
+    }
+
+    pub fn get_width(&self) -> u16 {
+        1
+    }
+
+    pub fn get_height(&self) -> u16 {
+        1
+    }
+
+    pub fn get_char(&self) -> char {
+        match self.weapon_type {
+            WeaponType::BasicGun => 'G',
+            WeaponType::Sword => 'S',
+            WeaponType::Bug => 'B',
+        }
     }
 }

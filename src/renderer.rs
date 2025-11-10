@@ -1,4 +1,4 @@
-use crate::entities::{Enemy, EnemyType, GameState, Player, Projectile, ProjectileOwner};
+use crate::entities::{Enemy, EnemyType, GameState, Pickup, Player, Projectile, ProjectileOwner, ProjectileType};
 use rand::Rng;
 use ratatui::{
     Frame,
@@ -14,6 +14,7 @@ pub struct RenderView<'a> {
     pub player: &'a Player,
     pub enemies: &'a [Enemy],
     pub projectiles: &'a [Projectile],
+    pub pickups: &'a [Pickup],
     pub score: u32,
     pub frame_count: u64,
     pub area: Rect,
@@ -126,13 +127,32 @@ impl GameRenderer {
                     width: 1,
                     height: 1,
                 };
-                let (char, color) = match projectile.owner {
-                    ProjectileOwner::Player => ('|', Color::Yellow),
-                    ProjectileOwner::Enemy => ('!', Color::Magenta),
+                let (char, color) = match (&projectile.projectile_type, &projectile.owner) {
+                    (ProjectileType::Bullet, ProjectileOwner::Player) => ('|', Color::Yellow),
+                    (ProjectileType::Slash, ProjectileOwner::Player) => ('~', Color::Cyan),
+                    (ProjectileType::BugShot, ProjectileOwner::Player) => ('•', Color::Green),
+                    (_, ProjectileOwner::Enemy) => ('!', Color::Magenta),
                 };
                 frame.render_widget(
                     Paragraph::new(char.to_string()).style(Style::default().fg(color)),
                     proj_area,
+                );
+            }
+        }
+
+        // Render pickups
+        for pickup in view.pickups {
+            if pickup.x < inner.width && pickup.y < inner.height {
+                let pickup_area = Rect {
+                    x: inner.x + pickup.x,
+                    y: inner.y + pickup.y,
+                    width: 1,
+                    height: 1,
+                };
+                frame.render_widget(
+                    Paragraph::new(pickup.get_char().to_string())
+                        .style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                    pickup_area,
                 );
             }
         }
@@ -166,6 +186,13 @@ impl GameRenderer {
                 format!("{}", view.enemies.len()),
                 Style::default()
                     .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("  Weapon: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                view.player.current_weapon.get_name(),
+                Style::default()
+                    .fg(Color::Magenta)
                     .add_modifier(Modifier::BOLD),
             ),
         ]);
