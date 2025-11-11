@@ -14,7 +14,9 @@ use std::io::Write;
 use std::time::Duration;
 use std::{fs::OpenOptions, io::stdout};
 
-use entities::{Enemy, EnemyType, GameState, Pickup, Player, Projectile, ProjectileOwner, WeaponType};
+use entities::{
+    Enemy, EnemyType, GameState, Pickup, Player, Projectile, ProjectileOwner, WeaponType,
+};
 use input::{InputAction, InputManager};
 use renderer::{GameRenderer, RenderView};
 
@@ -94,6 +96,8 @@ pub struct App {
     /// Last known screen dimensions
     screen_width: u16,
     screen_height: u16,
+    /// Edge width to keep horizontal distance consistent
+    edge_width: u16,
     /// Input manager
     input_manager: InputManager,
     /// Renderer
@@ -106,6 +110,7 @@ impl App {
         // Start with reasonable defaults, will be updated on first render
         let screen_width = 120;
         let screen_height = 30;
+        let edge_width = 35;
 
         Self {
             running: true,
@@ -118,6 +123,7 @@ impl App {
             frame_count: 0,
             screen_width,
             screen_height,
+            edge_width,
             input_manager: InputManager::new(),
             renderer: GameRenderer::new(),
         }
@@ -142,6 +148,7 @@ impl App {
                     score: self.score,
                     frame_count: self.frame_count,
                     area: frame.area(),
+                    edge_width: self.edge_width,
                 };
                 self.renderer.render(frame, &view);
             })?;
@@ -181,11 +188,13 @@ impl App {
                     *self = Self::new();
                 }
                 InputAction::MoveLeft => {
-                    let min_x = 0;
+                    let min_x = self.edge_width;
                     self.player.move_left(min_x);
                 }
                 InputAction::MoveRight => {
-                    let max_x = self.screen_width.saturating_sub(self.player.get_width());
+                    let max_x = self
+                        .screen_width
+                        .saturating_sub(self.player.get_width() + self.edge_width);
                     self.player.move_right(max_x);
                 }
                 InputAction::MoveUp => {
@@ -224,8 +233,9 @@ impl App {
         }
 
         // Remove out-of-bounds projectiles
-        self.projectiles
-            .retain(|p| !p.is_out_of_bounds(self.screen_width, self.screen_height));
+        self.projectiles.retain(|p| {
+            !p.is_out_of_bounds(self.edge_width, self.screen_width, self.screen_height)
+        });
 
         // Update enemies
         for enemy in &mut self.enemies {
@@ -257,7 +267,8 @@ impl App {
         }
 
         // Remove out-of-bounds pickups
-        self.pickups.retain(|p| !p.is_out_of_bounds(self.screen_height));
+        self.pickups
+            .retain(|p| !p.is_out_of_bounds(self.screen_height));
 
         // Check collisions
         self.check_collisions();
@@ -280,8 +291,12 @@ impl App {
         let temp_enemy = Enemy::new(0, 0, enemy_type);
         let enemy_width = temp_enemy.get_width();
 
-        // Spawn with enough space for the enemy sprite
-        let x = rng.gen_range(1..self.screen_width.saturating_sub(enemy_width + 1));
+        // Spawn with enough space for the enemy sprite, accounting for edges
+        let min_x = self.edge_width;
+        let max_x = self
+            .screen_width
+            .saturating_sub(enemy_width + self.edge_width);
+        let x = rng.gen_range(min_x..max_x.max(min_x + 1));
 
         self.enemies.push(Enemy::new(x, 2, enemy_type));
     }
@@ -296,8 +311,10 @@ impl App {
             _ => WeaponType::Bug,
         };
 
-        // Spawn at random x position near top of screen
-        let x = rng.gen_range(5..self.screen_width.saturating_sub(5));
+        // Spawn at random x position near top of screen, accounting for edges
+        let min_x = self.edge_width + 3;
+        let max_x = self.screen_width.saturating_sub(self.edge_width + 3);
+        let x = rng.gen_range(min_x..max_x.max(min_x + 1));
 
         self.pickups.push(Pickup::new(x, 3, weapon_type));
     }

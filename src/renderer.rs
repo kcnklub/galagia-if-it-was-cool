@@ -18,6 +18,7 @@ pub struct RenderView<'a> {
     pub score: u32,
     pub frame_count: u64,
     pub area: Rect,
+    pub edge_width: u16,
 }
 
 /// Handles all rendering responsibilities for the game
@@ -43,11 +44,22 @@ impl GameRenderer {
     /// Renders the active gameplay screen
     fn render_game(&self, frame: &mut Frame, view: &RenderView) {
         let area = view.area;
-        let inner = area;
+
+        // Render a block with left and right borders as edges
+        let game_area = if view.edge_width > 0 {
+            let block = Block::default()
+                .borders(Borders::LEFT | Borders::RIGHT)
+                .border_style(Style::default().fg(Color::DarkGray));
+            let inner = block.inner(area);
+            frame.render_widget(block, area);
+            inner
+        } else {
+            area
+        };
 
         // Render stars (simple background)
         if view.frame_count % 10 < 5 {
-            let star_text = (0..inner.height)
+            let star_text = (0..game_area.height)
                 .map(|_| {
                     let mut rng = rand::thread_rng();
                     if rng.gen_bool(0.05) {
@@ -60,7 +72,7 @@ impl GameRenderer {
                 .join("\n");
             frame.render_widget(
                 Paragraph::new(star_text).style(Style::default().fg(Color::DarkGray)),
-                inner,
+                game_area,
             );
         }
 
@@ -71,10 +83,10 @@ impl GameRenderer {
 
             for (i, line) in sprite_lines.iter().enumerate() {
                 let y_pos = view.player.y + i as u16;
-                if y_pos < inner.height && view.player.x + player_width < inner.width {
+                if y_pos < game_area.height && view.player.x + player_width < game_area.width {
                     let player_area = Rect {
-                        x: inner.x + view.player.x,
-                        y: inner.y + y_pos,
+                        x: game_area.x + view.player.x,
+                        y: game_area.y + y_pos,
                         width: player_width,
                         height: 1,
                     };
@@ -102,10 +114,10 @@ impl GameRenderer {
 
             for (i, line) in sprite_lines.iter().enumerate() {
                 let y_pos = enemy.y + i as u16;
-                if y_pos < inner.height && enemy.x + enemy_width < inner.width {
+                if y_pos < game_area.height && enemy.x + enemy_width < game_area.width {
                     let enemy_area = Rect {
-                        x: inner.x + enemy.x,
-                        y: inner.y + y_pos,
+                        x: game_area.x + enemy.x,
+                        y: game_area.y + y_pos,
                         width: enemy_width,
                         height: 1,
                     };
@@ -120,10 +132,10 @@ impl GameRenderer {
 
         // Render projectiles
         for projectile in view.projectiles {
-            if projectile.x < inner.width && projectile.y < inner.height {
+            if projectile.x < game_area.width && projectile.y < game_area.height {
                 let proj_area = Rect {
-                    x: inner.x + projectile.x,
-                    y: inner.y + projectile.y,
+                    x: game_area.x + projectile.x,
+                    y: game_area.y + projectile.y,
                     width: 1,
                     height: 1,
                 };
@@ -142,10 +154,10 @@ impl GameRenderer {
 
         // Render pickups
         for pickup in view.pickups {
-            if pickup.x < inner.width && pickup.y < inner.height {
+            if pickup.x < game_area.width && pickup.y < game_area.height {
                 let pickup_area = Rect {
-                    x: inner.x + pickup.x,
-                    y: inner.y + pickup.y,
+                    x: game_area.x + pickup.x,
+                    y: game_area.y + pickup.y,
                     width: 1,
                     height: 1,
                 };
