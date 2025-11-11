@@ -114,13 +114,13 @@ impl App {
     /// Construct a new instance of [`App`].
     pub fn new() -> Self {
         // Start with reasonable defaults, will be updated on first render
-        let screen_width: u16 = 120;
-        let screen_height: u16 = 30;
+        let screen_width: u16 = 60;
+        let screen_height: u16 = 70;
         let edge_width: u16 = 50;
 
         // Center player horizontally in the screen, position near bottom vertically
-        let player_x = screen_height / 2; // 6 units from bottom
-        let player_y = screen_width / 2; // Center horizontally on screen
+        let player_x = edge_width + screen_width / 2; // 6 units from bottom
+        let player_y = screen_height - (screen_height / 5); // Center horizontally on screen
 
         let mut app = Self {
             running: true,
