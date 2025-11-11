@@ -1,6 +1,8 @@
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use std::time::Duration;
 
+use crate::entities::GameState;
+
 /// Represents semantic game actions that can be triggered by input
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputAction {
@@ -42,7 +44,7 @@ impl InputManager {
 
     /// Polls for all input events and stores one-shot actions
     /// Should be called once per frame before getting actions
-    pub fn poll_events(&mut self, game_state: &crate::GameState) -> color_eyre::Result<()> {
+    pub fn poll_events(&mut self, game_state: &GameState) -> color_eyre::Result<()> {
         // Clear previous one-shot actions
         self.oneshot_actions.clear();
 
@@ -66,7 +68,7 @@ impl InputManager {
     }
 
     /// Processes a key event and updates key state and one-shot actions
-    fn handle_key_event(&mut self, key_event: KeyEvent, game_state: &crate::GameState) {
+    fn handle_key_event(&mut self, key_event: KeyEvent, game_state: &GameState) {
         match key_event.kind {
             KeyEventKind::Press => {
                 self.handle_key_press(key_event, game_state);
@@ -79,7 +81,7 @@ impl InputManager {
     }
 
     /// Handles key press events
-    fn handle_key_press(&mut self, key_event: KeyEvent, game_state: &crate::GameState) {
+    fn handle_key_press(&mut self, key_event: KeyEvent, game_state: &GameState) {
         // Check for quit keys first (works in any state)
         if matches!(
             key_event.code,
@@ -93,19 +95,19 @@ impl InputManager {
 
         // State-specific one-shot actions
         match game_state {
-            crate::GameState::Playing => {
+            GameState::Playing => {
                 if matches!(key_event.code, KeyCode::Char('p') | KeyCode::Char('P')) {
                     self.oneshot_actions.push(InputAction::Pause);
                     return;
                 }
             }
-            crate::GameState::Paused => {
+            GameState::Paused => {
                 if matches!(key_event.code, KeyCode::Char('p') | KeyCode::Char('P')) {
                     self.oneshot_actions.push(InputAction::Resume);
                     return;
                 }
             }
-            crate::GameState::GameOver => {
+            GameState::GameOver => {
                 if matches!(key_event.code, KeyCode::Char('r') | KeyCode::Char('R')) {
                     self.oneshot_actions.push(InputAction::Restart);
                     return;
@@ -114,7 +116,7 @@ impl InputManager {
         }
 
         // Continuous action keys (only tracked in Playing state)
-        if *game_state == crate::GameState::Playing {
+        if *game_state == GameState::Playing {
             match key_event.code {
                 // Movement keys - WASD
                 KeyCode::Char('w') | KeyCode::Char('W') | KeyCode::Up => {
@@ -166,14 +168,14 @@ impl InputManager {
 
     /// Returns all actions for this frame (both continuous and one-shot)
     /// Must be called after poll_events()
-    pub fn get_actions(&self, game_state: &crate::GameState) -> Vec<InputAction> {
+    pub fn get_actions(&self, game_state: &GameState) -> Vec<InputAction> {
         let mut actions = Vec::new();
 
         // Add one-shot actions first
         actions.extend_from_slice(&self.oneshot_actions);
 
         // Add continuous actions based on held keys (only in Playing state)
-        if *game_state == crate::GameState::Playing {
+        if *game_state == GameState::Playing {
             if self.key_state.left {
                 actions.push(InputAction::MoveLeft);
             }
