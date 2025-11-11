@@ -89,7 +89,7 @@ impl GameRenderer {
             );
         }
 
-        // Render player
+        // Render player - optimized with batched multi-line rendering
         if view.player.is_alive() {
             let sprite_lines = view.player.get_sprite_lines();
             let player_width = view.player.get_width();
@@ -100,28 +100,34 @@ impl GameRenderer {
                 Color::Green
             };
 
-            for (i, line) in sprite_lines.iter().enumerate() {
-                let y_pos = view.player.y + i as u16;
-                if y_pos < game_area.height && view.player.x + player_width < game_area.width {
-                    let player_area = Rect {
-                        x: game_area.x + view.player.x,
-                        y: game_area.y + y_pos,
-                        width: player_width,
-                        height: 1,
-                    };
-                    frame.render_widget(
-                        Paragraph::new(*line).style(
-                            Style::default()
-                                .fg(player_color)
-                                .add_modifier(Modifier::BOLD),
-                        ),
-                        player_area,
-                    );
-                }
+            // Build multi-line text with consistent styling
+            let text: Vec<Line> = sprite_lines
+                .iter()
+                .map(|line| {
+                    Line::from(*line).style(
+                        Style::default()
+                            .fg(player_color)
+                            .add_modifier(Modifier::BOLD),
+                    )
+                })
+                .collect();
+
+            let player_area = Rect {
+                x: game_area.x + view.player.x,
+                y: game_area.y + view.player.y,
+                width: player_width,
+                height: sprite_lines.len() as u16,
+            };
+
+            // Single widget call for entire player sprite
+            if view.player.y + sprite_lines.len() as u16 <= game_area.height
+                && view.player.x + player_width < game_area.width
+            {
+                frame.render_widget(Paragraph::new(text), player_area);
             }
         }
 
-        // Render enemies
+        // Render enemies - optimized with batched multi-line rendering
         for enemy in view.enemies {
             let sprite_lines = enemy.get_sprite_lines();
             let enemy_width = enemy.get_width();
@@ -136,33 +142,33 @@ impl GameRenderer {
                 }
             };
 
-            for (i, line) in sprite_lines.iter().enumerate() {
-                let y_pos = enemy.y + i as u16;
-                if y_pos < game_area.height && enemy.x + enemy_width < game_area.width {
-                    let enemy_area = Rect {
-                        x: game_area.x + enemy.x,
-                        y: game_area.y + y_pos,
-                        width: enemy_width,
-                        height: 1,
-                    };
-                    frame.render_widget(
-                        Paragraph::new(*line)
-                            .style(Style::default().fg(color).add_modifier(Modifier::BOLD)),
-                        enemy_area,
-                    );
-                }
+            // Build multi-line text with consistent styling
+            let text: Vec<Line> = sprite_lines
+                .iter()
+                .map(|line| {
+                    Line::from(*line).style(Style::default().fg(color).add_modifier(Modifier::BOLD))
+                })
+                .collect();
+
+            let enemy_area = Rect {
+                x: game_area.x + enemy.x,
+                y: game_area.y + enemy.y,
+                width: enemy_width,
+                height: sprite_lines.len() as u16,
+            };
+
+            // Single widget call for entire enemy sprite
+            if enemy.y + sprite_lines.len() as u16 <= game_area.height
+                && enemy.x + enemy_width < game_area.width
+            {
+                frame.render_widget(Paragraph::new(text), enemy_area);
             }
         }
 
-        // Render projectiles
+        // Render projectiles - optimized with direct buffer access
+        let buffer = frame.buffer_mut();
         for projectile in view.projectiles {
             if projectile.x < game_area.width && projectile.y < game_area.height {
-                let proj_area = Rect {
-                    x: game_area.x + projectile.x,
-                    y: game_area.y + projectile.y,
-                    width: 1,
-                    height: 1,
-                };
                 let (char, color) = match (&projectile.projectile_type, &projectile.owner) {
                     (ProjectileType::Bullet, ProjectileOwner::Player) => ('|', Color::Yellow),
                     (ProjectileType::Slash, ProjectileOwner::Player) => ('~', Color::Cyan),
@@ -177,22 +183,19 @@ impl GameRenderer {
                     }
                     (_, ProjectileOwner::Enemy) => ('!', Color::Magenta),
                 };
-                frame.render_widget(
-                    Paragraph::new(char.to_string()).style(Style::default().fg(color)),
-                    proj_area,
+
+                buffer.set_string(
+                    game_area.x + projectile.x,
+                    game_area.y + projectile.y,
+                    char.to_string(),
+                    Style::default().fg(color),
                 );
             }
         }
 
-        // Render particles
+        // Render particles - optimized with direct buffer access
         for particle in view.particles {
             if particle.x < game_area.width && particle.y < game_area.height {
-                let particle_area = Rect {
-                    x: game_area.x + particle.x,
-                    y: game_area.y + particle.y,
-                    width: 1,
-                    height: 1,
-                };
                 // Color particles based on their lifetime (fade effect)
                 let color = if particle.lifetime > 8 {
                     Color::Red
@@ -201,30 +204,24 @@ impl GameRenderer {
                 } else {
                     Color::Yellow
                 };
-                frame.render_widget(
-                    Paragraph::new(particle.char.to_string())
-                        .style(Style::default().fg(color).add_modifier(Modifier::BOLD)),
-                    particle_area,
+
+                buffer.set_string(
+                    game_area.x + particle.x,
+                    game_area.y + particle.y,
+                    particle.char.to_string(),
+                    Style::default().fg(color).add_modifier(Modifier::BOLD),
                 );
             }
         }
 
-        // Render pickups
+        // Render pickups - optimized with direct buffer access
         for pickup in view.pickups {
             if pickup.x < game_area.width && pickup.y < game_area.height {
-                let pickup_area = Rect {
-                    x: game_area.x + pickup.x,
-                    y: game_area.y + pickup.y,
-                    width: 1,
-                    height: 1,
-                };
-                frame.render_widget(
-                    Paragraph::new(pickup.get_char().to_string()).style(
-                        Style::default()
-                            .fg(Color::White)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    pickup_area,
+                buffer.set_string(
+                    game_area.x + pickup.x,
+                    game_area.y + pickup.y,
+                    pickup.get_char().to_string(),
+                    Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
                 );
             }
         }
