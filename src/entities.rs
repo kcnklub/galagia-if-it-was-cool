@@ -354,7 +354,7 @@ impl Projectile {
         }
     }
 
-    pub fn is_out_of_bounds(&self, max_x: u16, max_y: u16) -> bool {
+    pub fn is_out_of_bounds(&self, min_x: u16, max_x: u16, max_y: u16) -> bool {
         // Check if lifetime expired
         if let Some(lifetime) = self.lifetime {
             if lifetime == 0 {
@@ -363,7 +363,7 @@ impl Projectile {
         }
 
         // Check bounds
-        self.y == 0 || self.y >= max_y || self.x >= max_x
+        self.y == 0 || self.y >= max_y || self.x < min_x || self.x >= max_x
     }
 }
 
