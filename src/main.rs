@@ -78,41 +78,29 @@ fn main() -> color_eyre::Result<()> {
 
 /// The main application which holds the state and logic of the application.
 pub struct App {
-    /// Is the application running?
     running: bool,
-    /// Current game state
     game_state: GameState,
-    /// Player ship
     player: Player,
-    /// Enemy ships
     enemies: Vec<Enemy>,
-    /// Enemy formations
     formations: Vec<Formation>,
     /// Projectiles (from player and enemies)
     projectiles: Vec<Projectile>,
-    /// Weapon pickups
     pickups: Vec<Pickup>,
-    /// Player score
     score: u32,
-    /// Frame counter for timing
-    frame_count: u64,
-    /// Last known screen dimensions
+    /// screen dimensions
     screen_width: u16,
     screen_height: u16,
-    /// Edge width to keep horizontal distance consistent
     edge_width: u16,
-    /// Frames to wait after all enemies are killed before spawning next formation
+    /// Frames info
+    frame_count: u64,
     spawn_delay_frames: u64,
-    /// FPS tracking
     last_frame_time: Instant,
     fps: u32,
-    /// Game start time for timer
+    /// Game timers
     game_start_time: Instant,
-    /// Final time when game ended (None if still playing)
     final_time_secs: Option<u64>,
-    /// Input manager
+    /// internal components
     input_manager: InputManager,
-    /// Renderer
     renderer: GameRenderer,
 }
 
@@ -176,7 +164,8 @@ impl App {
             // Render the frame
             terminal.draw(|frame| {
                 // Use final time if game is over, otherwise calculate current elapsed time
-                let elapsed_time_secs = self.final_time_secs
+                let elapsed_time_secs = self
+                    .final_time_secs
                     .unwrap_or_else(|| self.game_start_time.elapsed().as_secs());
                 let view = RenderView {
                     game_state: self.game_state,
