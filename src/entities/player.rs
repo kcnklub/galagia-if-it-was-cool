@@ -68,7 +68,13 @@ impl Player {
     }
 
     pub fn reset_cooldown(&mut self) {
-        self.fire_cooldown = 5; // 5 frames between shots
+        // Different weapons have different fire rates
+        self.fire_cooldown = match self.current_weapon {
+            WeaponType::BasicGun => 5,
+            WeaponType::Sword => 5,
+            WeaponType::Bug => 5,
+            WeaponType::Bomber => 30, // Much slower fire rate for bomber (0.5 seconds)
+        };
     }
 
     pub fn update_cooldown(&mut self) {
@@ -162,7 +168,7 @@ impl Player {
                     ProjectileOwner::Player,
                     ProjectileType::BomberProjectile,
                     0,
-                    Some(30), // Bomb lasts 30 frames (~0.5 seconds) before exploding
+                    Some(90), // Bomb lasts 90 frames (~1.5 seconds) before exploding
                     5,        // Direct hit does only 5 damage, explosion does AoE damage
                 )]
             }
