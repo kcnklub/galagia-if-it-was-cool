@@ -1,4 +1,5 @@
 mod app;
+mod audio;
 mod entities;
 mod input;
 mod renderer;
