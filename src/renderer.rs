@@ -19,6 +19,7 @@ pub struct RenderView<'a> {
     pub frame_count: u64,
     pub area: Rect,
     pub edge_width: u16,
+    pub fps: u32,
 }
 
 /// Handles all rendering responsibilities for the game
@@ -45,13 +46,24 @@ impl GameRenderer {
     fn render_game(&self, frame: &mut Frame, view: &RenderView) {
         let area = view.area;
 
-        // Render a block with left and right borders as edges
+        // Create a narrower centered game area with borders
         let game_area = if view.edge_width > 0 {
+            // Calculate the narrowed area (subtract edge_width from each side)
+            let total_margin = view.edge_width * 2;
+            let game_width = area.width.saturating_sub(total_margin);
+            let centered_area = Rect {
+                x: area.x + view.edge_width,
+                y: area.y,
+                width: game_width,
+                height: area.height,
+            };
+
+            // Render block with borders around the narrowed area
             let block = Block::default()
                 .borders(Borders::LEFT | Borders::RIGHT)
                 .border_style(Style::default().fg(Color::DarkGray));
-            let inner = block.inner(area);
-            frame.render_widget(block, area);
+            let inner = block.inner(centered_area);
+            frame.render_widget(block, centered_area);
             inner
         } else {
             area
@@ -205,6 +217,13 @@ impl GameRenderer {
                 view.player.current_weapon.get_name(),
                 Style::default()
                     .fg(Color::Magenta)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("  FPS: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                format!("{}", view.fps),
+                Style::default()
+                    .fg(Color::White)
                     .add_modifier(Modifier::BOLD),
             ),
         ]);

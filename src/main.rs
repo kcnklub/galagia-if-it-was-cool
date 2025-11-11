@@ -11,7 +11,7 @@ use crossterm::{
 use rand::Rng;
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io::Write;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{fs::OpenOptions, io::stdout};
 
 use entities::{
@@ -98,6 +98,9 @@ pub struct App {
     screen_height: u16,
     /// Edge width to keep horizontal distance consistent
     edge_width: u16,
+    /// FPS tracking
+    last_frame_time: Instant,
+    fps: u32,
     /// Input manager
     input_manager: InputManager,
     /// Renderer
@@ -110,7 +113,7 @@ impl App {
         // Start with reasonable defaults, will be updated on first render
         let screen_width = 120;
         let screen_height = 30;
-        let edge_width = 35;
+        let edge_width = 50;
 
         Self {
             running: true,
@@ -124,6 +127,8 @@ impl App {
             screen_width,
             screen_height,
             edge_width,
+            last_frame_time: Instant::now(),
+            fps: 0,
             input_manager: InputManager::new(),
             renderer: GameRenderer::new(),
         }
@@ -132,6 +137,14 @@ impl App {
     /// Run the application's main loop.
     pub fn run(mut self, terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>) -> Result<()> {
         while self.running {
+            // Calculate FPS
+            let now = Instant::now();
+            let frame_time = now.duration_since(self.last_frame_time);
+            self.last_frame_time = now;
+            if frame_time.as_micros() > 0 {
+                self.fps = (1_000_000 / frame_time.as_micros()) as u32;
+            }
+
             // Update screen dimensions before rendering
             let area = terminal.size()?;
             self.screen_width = area.width;
@@ -149,6 +162,7 @@ impl App {
                     frame_count: self.frame_count,
                     area: frame.area(),
                     edge_width: self.edge_width,
+                    fps: self.fps,
                 };
                 self.renderer.render(frame, &view);
             })?;
@@ -166,7 +180,7 @@ impl App {
             }
 
             // Small sleep to maintain ~60 FPS and prevent CPU spinning
-            std::thread::sleep(Duration::from_millis(16));
+            std::thread::sleep(Duration::from_millis(8));
         }
         Ok(())
     }
@@ -188,13 +202,17 @@ impl App {
                     *self = Self::new();
                 }
                 InputAction::MoveLeft => {
-                    let min_x = self.edge_width;
+                    // Player coordinates are relative to game area, so min is 0
+                    let min_x = 0;
                     self.player.move_left(min_x);
                 }
                 InputAction::MoveRight => {
-                    let max_x = self
-                        .screen_width
-                        .saturating_sub(self.player.get_width() + self.edge_width);
+                    // Max x is based on playable game area width
+                    // Game area width = screen_width - (edge_width * 2) - 2 (for borders)
+                    // The player occupies positions [x, x+width), so max valid x is width - player_width
+                    let game_area_width = self.screen_width.saturating_sub(self.edge_width * 2 + 2);
+                    // Use saturating_sub to prevent underflow, then subtract 1 more for safety
+                    let max_x = game_area_width.saturating_sub(self.player.get_width() + 1);
                     self.player.move_right(max_x);
                 }
                 InputAction::MoveUp => {
@@ -232,10 +250,10 @@ impl App {
             projectile.update();
         }
 
-        // Remove out-of-bounds projectiles
-        self.projectiles.retain(|p| {
-            !p.is_out_of_bounds(self.edge_width, self.screen_width, self.screen_height)
-        });
+        // Remove out-of-bounds projectiles (coordinates are relative to game area)
+        let game_area_width = self.screen_width.saturating_sub(self.edge_width * 2 + 2);
+        self.projectiles
+            .retain(|p| !p.is_out_of_bounds(0, game_area_width, self.screen_height));
 
         // Update enemies
         for enemy in &mut self.enemies {
@@ -291,11 +309,11 @@ impl App {
         let temp_enemy = Enemy::new(0, 0, enemy_type);
         let enemy_width = temp_enemy.get_width();
 
-        // Spawn with enough space for the enemy sprite, accounting for edges
-        let min_x = self.edge_width;
-        let max_x = self
-            .screen_width
-            .saturating_sub(enemy_width + self.edge_width);
+        // Enemy coordinates are relative to game area
+        // Game area width = screen_width - (edge_width * 2) - 2 (for borders)
+        let game_area_width = self.screen_width.saturating_sub(self.edge_width * 2 + 2);
+        let min_x = 0;
+        let max_x = game_area_width.saturating_sub(enemy_width);
         let x = rng.gen_range(min_x..max_x.max(min_x + 1));
 
         self.enemies.push(Enemy::new(x, 2, enemy_type));
@@ -311,9 +329,11 @@ impl App {
             _ => WeaponType::Bug,
         };
 
-        // Spawn at random x position near top of screen, accounting for edges
-        let min_x = self.edge_width + 3;
-        let max_x = self.screen_width.saturating_sub(self.edge_width + 3);
+        // Pickup coordinates are relative to game area
+        // Game area width = screen_width - (edge_width * 2) - 2 (for borders)
+        let game_area_width = self.screen_width.saturating_sub(self.edge_width * 2 + 2);
+        let min_x = 3;
+        let max_x = game_area_width.saturating_sub(3);
         let x = rng.gen_range(min_x..max_x.max(min_x + 1));
 
         self.pickups.push(Pickup::new(x, 3, weapon_type));
