@@ -9,10 +9,10 @@ pub enum GameState {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum FormationType {
-    VShape,      // V-shaped formation
-    Diamond,     // Diamond/rhombus shape
-    Wall,        // Horizontal wall
-    Block,       // Dense rectangular block
+    VShape,  // V-shaped formation
+    Diamond, // Diamond/rhombus shape
+    Wall,    // Horizontal wall
+    Block,   // Dense rectangular block
 }
 
 #[derive(Debug, Clone)]
@@ -51,32 +51,64 @@ impl Formation {
                 // Top of V
                 (0, 0),
                 // Left arm
-                (-8, 4), (-16, 8), (-24, 12),
+                (-8, 4),
+                (-16, 8),
+                (-24, 12),
                 // Right arm
-                (8, 4), (16, 8), (24, 12),
+                (8, 4),
+                (16, 8),
+                (24, 12),
             ],
             FormationType::Diamond => vec![
                 // Top
                 (0, 0),
                 // Middle row
-                (-8, 4), (8, 4),
+                (-8, 4),
+                (8, 4),
                 // Widest row
-                (-16, 8), (0, 8), (16, 8),
+                (-16, 8),
+                (0, 8),
+                (16, 8),
                 // Bottom row
-                (-8, 12), (8, 12),
+                (-8, 12),
+                (8, 12),
                 // Bottom point
                 (0, 16),
             ],
             FormationType::Wall => vec![
-                (-24, 0), (-16, 0), (-8, 0), (0, 0), (8, 0), (16, 0), (24, 0),
-                (-24, 4), (-16, 4), (-8, 4), (0, 4), (8, 4), (16, 4), (24, 4),
+                (-24, 0),
+                (-16, 0),
+                (-8, 0),
+                (0, 0),
+                (8, 0),
+                (16, 0),
+                (24, 0),
+                (-24, 4),
+                (-16, 4),
+                (-8, 4),
+                (0, 4),
+                (8, 4),
+                (16, 4),
+                (24, 4),
             ],
             FormationType::Block => vec![
                 // Dense 4x4 block
-                (-12, 0), (-4, 0), (4, 0), (12, 0),
-                (-12, 4), (-4, 4), (4, 4), (12, 4),
-                (-12, 8), (-4, 8), (4, 8), (12, 8),
-                (-12, 12), (-4, 12), (4, 12), (12, 12),
+                (-12, 0),
+                (-4, 0),
+                (4, 0),
+                (12, 0),
+                (-12, 4),
+                (-4, 4),
+                (4, 4),
+                (12, 4),
+                (-12, 8),
+                (-4, 8),
+                (4, 8),
+                (12, 8),
+                (-12, 12),
+                (-4, 12),
+                (4, 12),
+                (12, 12),
             ],
         }
     }
@@ -111,7 +143,6 @@ impl Formation {
             }
         }
     }
-
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

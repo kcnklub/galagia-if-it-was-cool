@@ -81,8 +81,11 @@ impl InputManager {
     /// Handles key press events
     fn handle_key_press(&mut self, key_event: KeyEvent, game_state: &crate::GameState) {
         // Check for quit keys first (works in any state)
-        if matches!(key_event.code, KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc)
-            || (key_event.code == KeyCode::Char('c') && key_event.modifiers.contains(KeyModifiers::CONTROL))
+        if matches!(
+            key_event.code,
+            KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc
+        ) || (key_event.code == KeyCode::Char('c')
+            && key_event.modifiers.contains(KeyModifiers::CONTROL))
         {
             self.oneshot_actions.push(InputAction::Quit);
             return;

@@ -1,4 +1,6 @@
-use crate::entities::{Enemy, EnemyType, GameState, Pickup, Player, Projectile, ProjectileOwner, ProjectileType};
+use crate::entities::{
+    Enemy, EnemyType, GameState, Pickup, Player, Projectile, ProjectileOwner, ProjectileType,
+};
 use rand::Rng;
 use ratatui::{
     Frame,
@@ -74,11 +76,7 @@ impl GameRenderer {
             let star_text = (0..game_area.height)
                 .map(|_| {
                     let mut rng = rand::rng();
-                    if rng.random_bool(0.05) {
-                        "."
-                    } else {
-                        " "
-                    }
+                    if rng.random_bool(0.05) { "." } else { " " }
                 })
                 .collect::<Vec<_>>()
                 .join("\n");
@@ -174,8 +172,11 @@ impl GameRenderer {
                     height: 1,
                 };
                 frame.render_widget(
-                    Paragraph::new(pickup.get_char().to_string())
-                        .style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                    Paragraph::new(pickup.get_char().to_string()).style(
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     pickup_area,
                 );
             }
