@@ -87,17 +87,16 @@ impl Projectile {
 
     pub fn update(&mut self) {
         // Update lifetime
-        if let Some(ref mut lifetime) = self.lifetime {
-            if *lifetime > 0 {
+        if let Some(ref mut lifetime) = self.lifetime
+            && *lifetime > 0 {
                 *lifetime -= 1;
             }
-        }
 
         // Update vertical position
         // Bomber projectiles move slower (every 3rd frame)
         let should_move = if self.projectile_type == ProjectileType::BomberProjectile {
             // Use lifetime to determine movement (move on frames where lifetime % 3 == 0)
-            self.lifetime.map_or(true, |l| l % 3 == 0)
+            self.lifetime.is_none_or(|l| l % 3 == 0)
         } else {
             true
         };
@@ -126,11 +125,10 @@ impl Projectile {
 
     pub fn is_out_of_bounds(&self, min_x: u16, max_x: u16, max_y: u16) -> bool {
         // Check if lifetime expired
-        if let Some(lifetime) = self.lifetime {
-            if lifetime == 0 {
+        if let Some(lifetime) = self.lifetime
+            && lifetime == 0 {
                 return true;
             }
-        }
 
         // Check bounds
         self.y == 0 || self.y >= max_y || self.x < min_x || self.x >= max_x

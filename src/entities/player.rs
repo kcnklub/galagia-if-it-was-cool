@@ -259,11 +259,11 @@ mod tests {
         assert!(player.can_fire());
 
         player.reset_cooldown();
-        assert_eq!(player.fire_cooldown, 5);
+        assert_eq!(player.fire_cooldown, 10);
         assert!(!player.can_fire());
 
         // Test cooldown update
-        for _ in 0..5 {
+        for _ in 0..10 {
             player.update_cooldown();
         }
         assert!(player.can_fire());

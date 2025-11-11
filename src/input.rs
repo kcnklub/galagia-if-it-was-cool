@@ -33,6 +33,12 @@ pub struct InputManager {
     oneshot_actions: Vec<InputAction>,
 }
 
+impl Default for InputManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InputManager {
     /// Creates a new InputManager with default key state
     pub fn new() -> Self {

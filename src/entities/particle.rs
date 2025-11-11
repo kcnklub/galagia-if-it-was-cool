@@ -71,8 +71,8 @@ pub fn create_explosion_particles(center_x: u16, center_y: u16) -> Vec<Particle>
         particles.push(Particle::new(
             center_x,
             center_y,
-            dx * 1,
-            dy * 1,
+            *dx,
+            *dy,
             6, // Particles last 6 frames (~0.1 seconds)
             '*',
         ));

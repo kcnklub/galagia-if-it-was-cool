@@ -108,12 +108,12 @@ impl Formation {
         self.frame_counter += 1;
 
         // Move formation down every 8 frames
-        if self.frame_counter % 8 == 0 {
+        if self.frame_counter.is_multiple_of(8) {
             self.center_y += 1;
         }
 
         // Move formation horizontally every 4 frames
-        if self.frame_counter % 4 == 0 {
+        if self.frame_counter.is_multiple_of(4) {
             let new_x = self.center_x as i16 + self.direction_x;
 
             // Get the formation width to check bounds properly

@@ -242,12 +242,11 @@ impl App {
 
         // Update enemy positions based on formations
         for enemy in self.enemies.iter_mut() {
-            if let Some(formation_id) = enemy.formation_id {
-                if formation_id < self.formations.len() {
+            if let Some(formation_id) = enemy.formation_id
+                && formation_id < self.formations.len() {
                     let formation = &self.formations[formation_id];
                     enemy.update_formation_position(formation.center_x, formation.center_y);
                 }
-            }
 
             enemy.update();
 
@@ -275,7 +274,7 @@ impl App {
         });
 
         // Spawn pickups more frequently (50% chance every 180 frames ~ every 3 seconds)
-        if self.frame_count % 180 == 0 && rand::rng().random_bool(0.5) {
+        if self.frame_count.is_multiple_of(180) && rand::rng().random_bool(0.5) {
             self.spawn_pickup();
         }
 

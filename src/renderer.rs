@@ -32,6 +32,12 @@ pub struct GameRenderer {
     // Future: could add theme/config fields here
 }
 
+impl Default for GameRenderer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GameRenderer {
     /// Creates a new GameRenderer
     pub fn new() -> Self {

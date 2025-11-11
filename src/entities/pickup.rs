@@ -21,7 +21,7 @@ impl Pickup {
     pub fn update(&mut self) {
         // Pickups fall down very slowly (every 15 frames)
         self.frame_counter = self.frame_counter.wrapping_add(1);
-        if self.frame_counter % 15 == 0 {
+        if self.frame_counter.is_multiple_of(15) {
             self.y += 1;
         }
     }

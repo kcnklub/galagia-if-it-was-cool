@@ -5,6 +5,7 @@
 use simple::{Enemy, EnemyType, Player, Projectile, ProjectileOwner, WeaponType};
 
 /// Helper function to check if two rectangles collide (AABB collision detection)
+#[allow(clippy::too_many_arguments)]
 fn check_collision(x1: u16, y1: u16, w1: u16, h1: u16, x2: u16, y2: u16, w2: u16, h2: u16) -> bool {
     x1 < x2 + w2 && x1 + w1 > x2 && y1 < y2 + h2 && y1 + h1 > y2
 }
@@ -88,11 +89,16 @@ fn test_enemy_takes_damage_and_dies() {
     let mut enemy = Enemy::new_in_formation(20, 10, EnemyType::Basic, 0, (0, 0));
     let projectile = Projectile::new(22, 12, ProjectileOwner::Player);
 
-    // Simulate hit - Basic enemy has 10 health, projectile does 10 damage
+    // Simulate hit - Basic enemy has 15 health, projectile does 10 damage
     assert!(enemy.is_alive());
     enemy.take_damage(projectile.damage);
 
-    // With 10 health and 10 damage, health becomes 0 and enemy should be dead
+    // With 15 health and 10 damage, health becomes 5
+    assert_eq!(enemy.health, 5);
+    assert!(enemy.is_alive());
+
+    // Take another hit to kill
+    enemy.take_damage(projectile.damage);
     assert_eq!(enemy.health, 0);
     assert!(!enemy.is_alive());
 }
@@ -153,15 +159,15 @@ fn test_multiple_projectiles_move_independently() {
 #[test]
 fn test_enemy_survives_partial_damage() {
     let mut enemy = Enemy::new_in_formation(20, 10, EnemyType::Tank, 0, (0, 0));
+    assert_eq!(enemy.health, 30);
+
+    enemy.take_damage(5);
+    assert!(enemy.is_alive());
+    assert_eq!(enemy.health, 25);
+
+    enemy.take_damage(5);
+    assert!(enemy.is_alive());
     assert_eq!(enemy.health, 20);
-
-    enemy.take_damage(5);
-    assert!(enemy.is_alive());
-    assert_eq!(enemy.health, 15);
-
-    enemy.take_damage(5);
-    assert!(enemy.is_alive());
-    assert_eq!(enemy.health, 10);
 }
 
 #[test]
@@ -189,7 +195,7 @@ fn test_player_cooldown_limits_fire_rate() {
     assert_eq!(projectiles.len(), 0);
 
     // After cooldown expires, should be able to fire again
-    for _ in 0..5 {
+    for _ in 0..10 {
         player.update_cooldown();
     }
     let projectiles = player.try_fire();

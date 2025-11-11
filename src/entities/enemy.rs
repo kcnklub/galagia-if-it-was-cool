@@ -71,7 +71,7 @@ impl Enemy {
             EnemyType::Tank => 10, // Move every 10 frames (slowest)
         };
 
-        if self.fire_cooldown % move_interval == 0 {
+        if self.fire_cooldown.is_multiple_of(move_interval) {
             self.y += speed;
         }
 
@@ -92,7 +92,7 @@ impl Enemy {
     }
 
     pub fn can_fire(&self) -> bool {
-        self.fire_cooldown % 30 == 0 // Fire every 30 frames
+        self.fire_cooldown.is_multiple_of(30)
     }
 
     pub fn take_damage(&mut self, damage: u8) {
@@ -141,13 +141,13 @@ mod tests {
     #[test]
     fn test_enemy_health_by_type() {
         let basic = Enemy::new_in_formation(10, 10, EnemyType::Basic, 0, (0, 0));
-        assert_eq!(basic.health, 10);
+        assert_eq!(basic.health, 15);
 
         let fast = Enemy::new_in_formation(10, 10, EnemyType::Fast, 0, (0, 0));
-        assert_eq!(fast.health, 5);
+        assert_eq!(fast.health, 10);
 
         let tank = Enemy::new_in_formation(10, 10, EnemyType::Tank, 0, (0, 0));
-        assert_eq!(tank.health, 20);
+        assert_eq!(tank.health, 30);
     }
 
     #[test]
@@ -166,7 +166,7 @@ mod tests {
     fn test_enemy_take_damage() {
         let mut enemy = Enemy::new_in_formation(10, 10, EnemyType::Basic, 0, (0, 0));
         enemy.take_damage(5);
-        assert_eq!(enemy.health, 5);
+        assert_eq!(enemy.health, 10);
         assert!(enemy.is_alive());
 
         enemy.take_damage(10);
