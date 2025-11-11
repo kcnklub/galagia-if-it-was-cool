@@ -73,8 +73,8 @@ impl GameRenderer {
         if view.frame_count % 10 < 5 {
             let star_text = (0..game_area.height)
                 .map(|_| {
-                    let mut rng = rand::thread_rng();
-                    if rng.gen_bool(0.05) {
+                    let mut rng = rand::rng();
+                    if rng.random_bool(0.05) {
                         "."
                     } else {
                         " "

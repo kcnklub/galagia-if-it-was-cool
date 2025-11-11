@@ -8,6 +8,113 @@ pub enum GameState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+pub enum FormationType {
+    VShape,      // V-shaped formation
+    Diamond,     // Diamond/rhombus shape
+    Wall,        // Horizontal wall
+    Block,       // Dense rectangular block
+}
+
+#[derive(Debug, Clone)]
+pub struct Formation {
+    /// Center X position of the formation
+    pub center_x: u16,
+    /// Center Y position of the formation
+    pub center_y: u16,
+    /// Formation type
+    pub formation_type: FormationType,
+    /// Movement direction (-1 left, 0 none, 1 right)
+    pub direction_x: i16,
+    /// Frame counter for timing
+    pub frame_counter: u16,
+    /// Indices of enemies in this formation
+    pub enemy_indices: Vec<usize>,
+}
+
+impl Formation {
+    pub fn new(center_x: u16, center_y: u16, formation_type: FormationType) -> Self {
+        Self {
+            center_x,
+            center_y,
+            formation_type,
+            direction_x: 1, // Start moving right
+            frame_counter: 0,
+            enemy_indices: Vec::new(),
+        }
+    }
+
+    /// Get relative positions for enemies in this formation
+    /// Returns (dx, dy) offsets from center
+    pub fn get_positions(&self) -> Vec<(i16, i16)> {
+        match self.formation_type {
+            FormationType::VShape => vec![
+                // Top of V
+                (0, 0),
+                // Left arm
+                (-8, 4), (-16, 8), (-24, 12),
+                // Right arm
+                (8, 4), (16, 8), (24, 12),
+            ],
+            FormationType::Diamond => vec![
+                // Top
+                (0, 0),
+                // Middle row
+                (-8, 4), (8, 4),
+                // Widest row
+                (-16, 8), (0, 8), (16, 8),
+                // Bottom row
+                (-8, 12), (8, 12),
+                // Bottom point
+                (0, 16),
+            ],
+            FormationType::Wall => vec![
+                (-24, 0), (-16, 0), (-8, 0), (0, 0), (8, 0), (16, 0), (24, 0),
+                (-24, 4), (-16, 4), (-8, 4), (0, 4), (8, 4), (16, 4), (24, 4),
+            ],
+            FormationType::Block => vec![
+                // Dense 4x4 block
+                (-12, 0), (-4, 0), (4, 0), (12, 0),
+                (-12, 4), (-4, 4), (4, 4), (12, 4),
+                (-12, 8), (-4, 8), (4, 8), (12, 8),
+                (-12, 12), (-4, 12), (4, 12), (12, 12),
+            ],
+        }
+    }
+
+    pub fn update(&mut self, max_x: u16) {
+        self.frame_counter += 1;
+
+        // Move formation down every 8 frames
+        if self.frame_counter % 8 == 0 {
+            self.center_y += 1;
+        }
+
+        // Move formation horizontally every 4 frames
+        if self.frame_counter % 4 == 0 {
+            let new_x = self.center_x as i16 + self.direction_x;
+
+            // Get the formation width to check bounds properly
+            let positions = self.get_positions();
+            let min_offset = positions.iter().map(|(x, _)| *x).min().unwrap_or(0);
+            let max_offset = positions.iter().map(|(x, _)| *x).max().unwrap_or(0);
+
+            // Check if the new position would put any enemy out of bounds
+            let left_edge = new_x + min_offset;
+            let right_edge = new_x + max_offset;
+
+            // Keep formation within bounds with padding
+            if left_edge >= 5 && right_edge <= (max_x as i16 - 10) {
+                self.center_x = new_x as u16;
+            } else {
+                // Hit edge, reverse direction
+                self.direction_x = -self.direction_x;
+            }
+        }
+    }
+
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum WeaponType {
     BasicGun,
     Sword,
@@ -181,10 +288,20 @@ pub struct Enemy {
     pub health: u8,
     pub enemy_type: EnemyType,
     pub fire_cooldown: u8,
+    /// Optional formation this enemy belongs to
+    pub formation_id: Option<usize>,
+    /// Offset from formation center
+    pub formation_offset: (i16, i16),
 }
 
 impl Enemy {
-    pub fn new(x: u16, y: u16, enemy_type: EnemyType) -> Self {
+    pub fn new_in_formation(
+        x: u16,
+        y: u16,
+        enemy_type: EnemyType,
+        formation_id: usize,
+        offset: (i16, i16),
+    ) -> Self {
         let health = match enemy_type {
             EnemyType::Basic => 10,
             EnemyType::Fast => 5,
@@ -197,11 +314,19 @@ impl Enemy {
             health,
             enemy_type,
             fire_cooldown: 0,
+            formation_id: Some(formation_id),
+            formation_offset: offset,
         }
     }
 
     pub fn update(&mut self) {
-        // Move down based on type
+        // Enemies in formations don't move on their own - they follow the formation
+        if self.formation_id.is_some() {
+            self.fire_cooldown = self.fire_cooldown.wrapping_add(1);
+            return;
+        }
+
+        // Move down based on type (for non-formation enemies)
         let speed = match self.enemy_type {
             EnemyType::Basic => 1,
             EnemyType::Fast => 1,
@@ -220,6 +345,19 @@ impl Enemy {
         }
 
         self.fire_cooldown = self.fire_cooldown.wrapping_add(1);
+    }
+
+    /// Update position based on formation center
+    pub fn update_formation_position(&mut self, center_x: u16, center_y: u16) {
+        let new_x = center_x as i16 + self.formation_offset.0;
+        let new_y = center_y as i16 + self.formation_offset.1;
+
+        if new_x >= 0 {
+            self.x = new_x as u16;
+        }
+        if new_y >= 0 {
+            self.y = new_y as u16;
+        }
     }
 
     pub fn can_fire(&self) -> bool {

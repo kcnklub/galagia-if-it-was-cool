@@ -15,7 +15,8 @@ use std::time::{Duration, Instant};
 use std::{fs::OpenOptions, io::stdout};
 
 use entities::{
-    Enemy, EnemyType, GameState, Pickup, Player, Projectile, ProjectileOwner, WeaponType,
+    Enemy, EnemyType, Formation, FormationType, GameState, Pickup, Player, Projectile,
+    ProjectileOwner, WeaponType,
 };
 use input::{InputAction, InputManager};
 use renderer::{GameRenderer, RenderView};
@@ -85,6 +86,8 @@ pub struct App {
     player: Player,
     /// Enemy ships
     enemies: Vec<Enemy>,
+    /// Enemy formations
+    formations: Vec<Formation>,
     /// Projectiles (from player and enemies)
     projectiles: Vec<Projectile>,
     /// Weapon pickups
@@ -111,15 +114,20 @@ impl App {
     /// Construct a new instance of [`App`].
     pub fn new() -> Self {
         // Start with reasonable defaults, will be updated on first render
-        let screen_width = 120;
-        let screen_height = 30;
-        let edge_width = 50;
+        let screen_width: u16 = 120;
+        let screen_height: u16 = 30;
+        let edge_width: u16 = 50;
 
-        Self {
+        // Center player horizontally in the screen, position near bottom vertically
+        let player_x = screen_height / 2; // 6 units from bottom
+        let player_y = screen_width / 2; // Center horizontally on screen
+
+        let mut app = Self {
             running: true,
             game_state: GameState::Playing,
-            player: Player::new(screen_width / 2, screen_height - 5),
+            player: Player::new(player_x, player_y),
             enemies: Vec::new(),
+            formations: Vec::new(),
             projectiles: Vec::new(),
             pickups: Vec::new(),
             score: 0,
@@ -131,7 +139,12 @@ impl App {
             fps: 0,
             input_manager: InputManager::new(),
             renderer: GameRenderer::new(),
-        }
+        };
+
+        // Spawn initial formation so player doesn't have to wait
+        app.spawn_formation();
+
+        app
     }
 
     /// Run the application's main loop.
@@ -240,9 +253,9 @@ impl App {
         // Update player cooldown
         self.player.update_cooldown();
 
-        // Spawn enemies periodically
-        if self.frame_count % 60 == 0 {
-            self.spawn_enemy();
+        // Spawn formations more frequently to increase difficulty
+        if self.frame_count % (60 * 30) == 0 {
+            self.spawn_formation();
         }
 
         // Update projectiles
@@ -255,12 +268,25 @@ impl App {
         self.projectiles
             .retain(|p| !p.is_out_of_bounds(0, game_area_width, self.screen_height));
 
-        // Update enemies
-        for enemy in &mut self.enemies {
+        // Update formations
+        let game_area_width = self.screen_width.saturating_sub(self.edge_width * 2 + 2);
+        for formation in &mut self.formations {
+            formation.update(game_area_width);
+        }
+
+        // Update enemy positions based on formations
+        for enemy in self.enemies.iter_mut() {
+            if let Some(formation_id) = enemy.formation_id {
+                if formation_id < self.formations.len() {
+                    let formation = &self.formations[formation_id];
+                    enemy.update_formation_position(formation.center_x, formation.center_y);
+                }
+            }
+
             enemy.update();
 
             // Enemy fires occasionally
-            if enemy.can_fire() && rand::thread_rng().gen_bool(0.3) {
+            if enemy.can_fire() && rand::rng().random_bool(0.3) {
                 let enemy_width = enemy.get_width();
                 let enemy_height = enemy.get_height();
                 // Fire from the center bottom of the enemy sprite
@@ -274,8 +300,16 @@ impl App {
         // Remove enemies that went off screen
         self.enemies.retain(|e| e.y < self.screen_height);
 
+        // Clean up formations that have no enemies left or went off screen
+        self.formations.retain(|f| {
+            f.center_y < self.screen_height
+                && f.enemy_indices
+                    .iter()
+                    .any(|&idx| idx < self.enemies.len() && self.enemies[idx].is_alive())
+        });
+
         // Spawn pickups more frequently (50% chance every 180 frames ~ every 3 seconds)
-        if self.frame_count % 180 == 0 && rand::thread_rng().gen_bool(0.5) {
+        if self.frame_count % 180 == 0 && rand::rng().random_bool(0.5) {
             self.spawn_pickup();
         }
 
@@ -297,33 +331,62 @@ impl App {
         }
     }
 
-    fn spawn_enemy(&mut self) {
-        let mut rng = rand::thread_rng();
-        let enemy_type = match rng.gen_range(0..10) {
-            0..=5 => EnemyType::Basic,
-            6..=8 => EnemyType::Fast,
+    fn spawn_formation(&mut self) {
+        let mut rng = rand::rng();
+
+        // Randomly select a formation type
+        let formation_type = match rng.random_range(0..4) {
+            0 => FormationType::VShape,
+            1 => FormationType::Diamond,
+            2 => FormationType::Wall,
+            _ => FormationType::Block,
+        };
+
+        // Calculate game area
+        let game_area_width = self.screen_width.saturating_sub(self.edge_width * 2 + 2);
+
+        // Place formation center somewhere in the upper third of the screen
+        // Add some padding from edges (30 units on each side)
+        let min_x = 30;
+        let max_x = game_area_width.saturating_sub(30);
+        let center_x = rng.random_range(min_x..max_x.max(min_x + 1));
+        let center_y = 5;
+
+        let formation_id = self.formations.len();
+        let mut formation = Formation::new(center_x, center_y, formation_type);
+
+        // Get positions and create enemies
+        let positions = formation.get_positions();
+        let enemy_type = match rng.random_range(0..10) {
+            0..=6 => EnemyType::Basic,
+            7..=8 => EnemyType::Fast,
             _ => EnemyType::Tank,
         };
 
-        // Create a temporary enemy to get its width
-        let temp_enemy = Enemy::new(0, 0, enemy_type);
-        let enemy_width = temp_enemy.get_width();
+        for offset in positions {
+            let x = (center_x as i16 + offset.0).max(0) as u16;
+            let y = (center_y as i16 + offset.1).max(0) as u16;
 
-        // Enemy coordinates are relative to game area
-        // Game area width = screen_width - (edge_width * 2) - 2 (for borders)
-        let game_area_width = self.screen_width.saturating_sub(self.edge_width * 2 + 2);
-        let min_x = 0;
-        let max_x = game_area_width.saturating_sub(enemy_width);
-        let x = rng.gen_range(min_x..max_x.max(min_x + 1));
+            let enemy_idx = self.enemies.len();
+            formation.enemy_indices.push(enemy_idx);
 
-        self.enemies.push(Enemy::new(x, 2, enemy_type));
+            self.enemies.push(Enemy::new_in_formation(
+                x,
+                y,
+                enemy_type,
+                formation_id,
+                offset,
+            ));
+        }
+
+        self.formations.push(formation);
     }
 
     fn spawn_pickup(&mut self) {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         // Randomly select a weapon type
-        let weapon_type = match rng.gen_range(0..3) {
+        let weapon_type = match rng.random_range(0..3) {
             0 => WeaponType::BasicGun,
             1 => WeaponType::Sword,
             _ => WeaponType::Bug,
@@ -334,7 +397,7 @@ impl App {
         let game_area_width = self.screen_width.saturating_sub(self.edge_width * 2 + 2);
         let min_x = 3;
         let max_x = game_area_width.saturating_sub(3);
-        let x = rng.gen_range(min_x..max_x.max(min_x + 1));
+        let x = rng.random_range(min_x..max_x.max(min_x + 1));
 
         self.pickups.push(Pickup::new(x, 3, weapon_type));
     }
