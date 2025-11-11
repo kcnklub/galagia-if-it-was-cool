@@ -1,5 +1,6 @@
 use crate::entities::{
-    Enemy, EnemyType, GameState, Particle, Pickup, Player, Projectile, ProjectileOwner, ProjectileType,
+    Enemy, EnemyType, GameState, Particle, Pickup, Player, Projectile, ProjectileOwner,
+    ProjectileType,
 };
 use rand::Rng;
 use ratatui::{

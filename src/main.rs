@@ -290,7 +290,9 @@ impl App {
         }
 
         // Remove dead or out-of-bounds particles
-        self.particles.retain(|p| !p.is_dead() && !p.is_out_of_bounds(0, game_area_width, self.screen_height));
+        self.particles.retain(|p| {
+            !p.is_dead() && !p.is_out_of_bounds(0, game_area_width, self.screen_height)
+        });
 
         // Update formations
         let game_area_width = self.screen_width.saturating_sub(self.edge_width * 2 + 2);
@@ -447,7 +449,8 @@ impl App {
                     const EXPLOSION_DAMAGE: u8 = 25;
 
                     // Create explosion particle effect
-                    let explosion_particles = create_explosion_particles(projectile.x, projectile.y);
+                    let explosion_particles =
+                        create_explosion_particles(projectile.x, projectile.y);
                     self.particles.extend(explosion_particles);
 
                     for (e_idx, enemy) in self.enemies.iter_mut().enumerate() {
@@ -459,12 +462,15 @@ impl App {
                         let dy = (projectile.y as i32 - enemy_center_y as i32).abs();
 
                         // Simple circle collision (using squared distance to avoid sqrt)
-                        if (dx * dx + dy * dy) <= (EXPLOSION_RADIUS as i32 * EXPLOSION_RADIUS as i32) {
+                        if (dx * dx + dy * dy)
+                            <= (EXPLOSION_RADIUS as i32 * EXPLOSION_RADIUS as i32)
+                        {
                             enemy.take_damage(EXPLOSION_DAMAGE);
 
                             if !enemy.is_alive() {
                                 // Create particles at enemy death location
-                                let death_particles = create_explosion_particles(enemy_center_x, enemy_center_y);
+                                let death_particles =
+                                    create_explosion_particles(enemy_center_x, enemy_center_y);
                                 self.particles.extend(death_particles);
 
                                 self.score += enemy.get_points();
@@ -494,7 +500,8 @@ impl App {
                             // Create particles at enemy death location
                             let enemy_center_x = enemy.x + enemy_width / 2;
                             let enemy_center_y = enemy.y + enemy_height / 2;
-                            let death_particles = create_explosion_particles(enemy_center_x, enemy_center_y);
+                            let death_particles =
+                                create_explosion_particles(enemy_center_x, enemy_center_y);
                             self.particles.extend(death_particles);
 
                             self.score += enemy.get_points();
@@ -539,7 +546,8 @@ impl App {
                 // Create particles at collision point
                 let enemy_center_x = enemy.x + enemy_width / 2;
                 let enemy_center_y = enemy.y + enemy_height / 2;
-                let collision_particles = create_explosion_particles(enemy_center_x, enemy_center_y);
+                let collision_particles =
+                    create_explosion_particles(enemy_center_x, enemy_center_y);
                 self.particles.extend(collision_particles);
 
                 self.player.take_damage(20);

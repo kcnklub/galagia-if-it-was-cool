@@ -57,14 +57,14 @@ pub fn create_explosion_particles(center_x: u16, center_y: u16) -> Vec<Particle>
 
     // Create particles in 8 directions (cardinal + diagonal)
     let directions = [
-        (0, -1),   // Up
-        (1, -1),   // Up-Right
-        (1, 0),    // Right
-        (1, 1),    // Down-Right
-        (0, 1),    // Down
-        (-1, 1),   // Down-Left
-        (-1, 0),   // Left
-        (-1, -1),  // Up-Left
+        (0, -1),  // Up
+        (1, -1),  // Up-Right
+        (1, 0),   // Right
+        (1, 1),   // Down-Right
+        (0, 1),   // Down
+        (-1, 1),  // Down-Left
+        (-1, 0),  // Left
+        (-1, -1), // Up-Left
     ];
 
     for (dx, dy) in directions.iter() {
@@ -80,11 +80,7 @@ pub fn create_explosion_particles(center_x: u16, center_y: u16) -> Vec<Particle>
 
     // Add one central particle
     particles.push(Particle::new(
-        center_x,
-        center_y,
-        0,
-        0,
-        4, // Brief flash
+        center_x, center_y, 0, 0, 4, // Brief flash
         'o',
     ));
 
