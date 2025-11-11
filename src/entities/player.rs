@@ -5,6 +5,7 @@ pub enum WeaponType {
     BasicGun,
     Sword,
     Bug,
+    Bomber,
 }
 
 impl WeaponType {
@@ -13,6 +14,7 @@ impl WeaponType {
             WeaponType::BasicGun => "Basic Gun",
             WeaponType::Sword => "Sword",
             WeaponType::Bug => "Bug",
+            WeaponType::Bomber => "The Bomber",
         }
     }
 }
@@ -151,6 +153,18 @@ impl Player {
                         None,
                     ),
                 ]
+            }
+            WeaponType::Bomber => {
+                // Slow-moving bomb that explodes after a short time
+                vec![Projectile::new_with_damage(
+                    center_x,
+                    fire_y,
+                    ProjectileOwner::Player,
+                    ProjectileType::BomberProjectile,
+                    0,
+                    Some(30), // Bomb lasts 30 frames (~0.5 seconds) before exploding
+                    5,        // Direct hit does only 5 damage, explosion does AoE damage
+                )]
             }
         }
     }

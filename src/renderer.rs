@@ -154,6 +154,14 @@ impl GameRenderer {
                     (ProjectileType::Bullet, ProjectileOwner::Player) => ('|', Color::Yellow),
                     (ProjectileType::Slash, ProjectileOwner::Player) => ('~', Color::Cyan),
                     (ProjectileType::BugShot, ProjectileOwner::Player) => ('•', Color::Green),
+                    (ProjectileType::BomberProjectile, ProjectileOwner::Player) => {
+                        // Blinking effect when near explosion
+                        if projectile.lifetime.unwrap_or(1) <= 10 {
+                            ('O', Color::Red)
+                        } else {
+                            ('O', Color::LightRed)
+                        }
+                    }
                     (_, ProjectileOwner::Enemy) => ('!', Color::Magenta),
                 };
                 frame.render_widget(

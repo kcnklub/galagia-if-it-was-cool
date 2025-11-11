@@ -16,7 +16,7 @@ use std::{fs::OpenOptions, io::stdout};
 
 use entities::{
     Enemy, EnemyType, Formation, FormationType, GameState, Pickup, Player, Projectile,
-    ProjectileOwner, WeaponType,
+    ProjectileOwner, ProjectileType, WeaponType,
 };
 use input::{InputAction, InputManager};
 use renderer::{GameRenderer, RenderView};
@@ -403,10 +403,11 @@ impl App {
         let mut rng = rand::rng();
 
         // Randomly select a weapon type
-        let weapon_type = match rng.random_range(0..3) {
+        let weapon_type = match rng.random_range(0..4) {
             0 => WeaponType::BasicGun,
             1 => WeaponType::Sword,
-            _ => WeaponType::Bug,
+            2 => WeaponType::Bug,
+            _ => WeaponType::Bomber,
         };
 
         // Pickup coordinates are relative to game area
@@ -426,6 +427,37 @@ impl App {
 
         for (p_idx, projectile) in self.projectiles.iter().enumerate() {
             if projectile.owner == ProjectileOwner::Player {
+                // Check if bomber projectile lifetime expired (explodes)
+                if projectile.projectile_type == ProjectileType::BomberProjectile
+                    && projectile.lifetime == Some(0)
+                {
+                    // Explosion! Deal AoE damage to all enemies in radius
+                    const EXPLOSION_RADIUS: u16 = 8;
+                    const EXPLOSION_DAMAGE: u8 = 25;
+
+                    for (e_idx, enemy) in self.enemies.iter_mut().enumerate() {
+                        // Calculate distance between explosion center and enemy center
+                        let enemy_center_x = enemy.x + enemy.get_width() / 2;
+                        let enemy_center_y = enemy.y + enemy.get_height() / 2;
+
+                        let dx = (projectile.x as i32 - enemy_center_x as i32).abs();
+                        let dy = (projectile.y as i32 - enemy_center_y as i32).abs();
+
+                        // Simple circle collision (using squared distance to avoid sqrt)
+                        if (dx * dx + dy * dy) <= (EXPLOSION_RADIUS as i32 * EXPLOSION_RADIUS as i32) {
+                            enemy.take_damage(EXPLOSION_DAMAGE);
+
+                            if !enemy.is_alive() {
+                                self.score += enemy.get_points();
+                                enemies_to_remove.push(e_idx);
+                            }
+                        }
+                    }
+                    projectiles_to_remove.push(p_idx);
+                    continue;
+                }
+
+                // Regular collision detection for non-bomber projectiles
                 for (e_idx, enemy) in self.enemies.iter_mut().enumerate() {
                     // Bounding box collision detection for larger sprites
                     let enemy_width = enemy.get_width();

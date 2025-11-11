@@ -9,6 +9,7 @@ pub enum ProjectileType {
     Bullet,
     Slash,
     BugShot,
+    BomberProjectile,
 }
 
 #[derive(Debug, Clone)]
@@ -64,6 +65,26 @@ impl Projectile {
         }
     }
 
+    pub fn new_with_damage(
+        x: u16,
+        y: u16,
+        owner: ProjectileOwner,
+        projectile_type: ProjectileType,
+        velocity_x: i16,
+        lifetime: Option<u8>,
+        damage: u8,
+    ) -> Self {
+        Self {
+            x,
+            y,
+            owner,
+            damage,
+            projectile_type,
+            velocity_x,
+            lifetime,
+        }
+    }
+
     pub fn update(&mut self) {
         // Update lifetime
         if let Some(ref mut lifetime) = self.lifetime {
@@ -73,14 +94,24 @@ impl Projectile {
         }
 
         // Update vertical position
-        match self.owner {
-            ProjectileOwner::Player => {
-                if self.y > 0 {
-                    self.y -= 1;
+        // Bomber projectiles move slower (every 3rd frame)
+        let should_move = if self.projectile_type == ProjectileType::BomberProjectile {
+            // Use lifetime to determine movement (move on frames where lifetime % 3 == 0)
+            self.lifetime.map_or(true, |l| l % 3 == 0)
+        } else {
+            true
+        };
+
+        if should_move {
+            match self.owner {
+                ProjectileOwner::Player => {
+                    if self.y > 0 {
+                        self.y -= 1;
+                    }
                 }
-            }
-            ProjectileOwner::Enemy => {
-                self.y += 1;
+                ProjectileOwner::Enemy => {
+                    self.y += 1;
+                }
             }
         }
 

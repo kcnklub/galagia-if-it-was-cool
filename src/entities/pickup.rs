@@ -43,6 +43,7 @@ impl Pickup {
             WeaponType::BasicGun => 'G',
             WeaponType::Sword => 'S',
             WeaponType::Bug => 'B',
+            WeaponType::Bomber => 'X',
         }
     }
 }
