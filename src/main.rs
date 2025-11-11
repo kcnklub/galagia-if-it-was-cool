@@ -101,9 +101,15 @@ pub struct App {
     screen_height: u16,
     /// Edge width to keep horizontal distance consistent
     edge_width: u16,
+    /// Frames to wait after all enemies are killed before spawning next formation
+    spawn_delay_frames: u64,
     /// FPS tracking
     last_frame_time: Instant,
     fps: u32,
+    /// Game start time for timer
+    game_start_time: Instant,
+    /// Final time when game ended (None if still playing)
+    final_time_secs: Option<u64>,
     /// Input manager
     input_manager: InputManager,
     /// Renderer
@@ -122,6 +128,7 @@ impl App {
         let player_x = edge_width + screen_width / 2; // 6 units from bottom
         let player_y = screen_height - (screen_height / 5); // Center horizontally on screen
 
+        let now = Instant::now();
         let mut app = Self {
             running: true,
             game_state: GameState::Playing,
@@ -135,8 +142,11 @@ impl App {
             screen_width,
             screen_height,
             edge_width,
-            last_frame_time: Instant::now(),
+            spawn_delay_frames: 0,
+            last_frame_time: now,
             fps: 0,
+            game_start_time: now,
+            final_time_secs: None,
             input_manager: InputManager::new(),
             renderer: GameRenderer::new(),
         };
@@ -165,6 +175,9 @@ impl App {
 
             // Render the frame
             terminal.draw(|frame| {
+                // Use final time if game is over, otherwise calculate current elapsed time
+                let elapsed_time_secs = self.final_time_secs
+                    .unwrap_or_else(|| self.game_start_time.elapsed().as_secs());
                 let view = RenderView {
                     game_state: self.game_state,
                     player: &self.player,
@@ -176,6 +189,7 @@ impl App {
                     area: frame.area(),
                     edge_width: self.edge_width,
                     fps: self.fps,
+                    elapsed_time_secs,
                 };
                 self.renderer.render(frame, &view);
             })?;
@@ -253,9 +267,19 @@ impl App {
         // Update player cooldown
         self.player.update_cooldown();
 
-        // Spawn formations more frequently to increase difficulty
-        if self.frame_count % (60 * 30) == 0 {
-            self.spawn_formation();
+        // Check if all enemies are dead and spawn new formation after delay
+        if self.enemies.is_empty() {
+            if self.spawn_delay_frames > 0 {
+                self.spawn_delay_frames -= 1;
+            } else {
+                // Spawn new formation
+                self.spawn_formation();
+                // Set delay for next spawn (90 frames = ~1.5 seconds at 60 FPS)
+                self.spawn_delay_frames = 90;
+            }
+        } else {
+            // Reset delay counter if there are enemies alive
+            self.spawn_delay_frames = 90;
         }
 
         // Update projectiles
@@ -327,6 +351,10 @@ impl App {
 
         // Check if player is dead
         if !self.player.is_alive() {
+            // Capture final time when transitioning to game over
+            if self.game_state != GameState::GameOver {
+                self.final_time_secs = Some(self.game_start_time.elapsed().as_secs());
+            }
             self.game_state = GameState::GameOver;
         }
     }

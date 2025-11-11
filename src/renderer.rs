@@ -22,6 +22,7 @@ pub struct RenderView<'a> {
     pub area: Rect,
     pub edge_width: u16,
     pub fps: u32,
+    pub elapsed_time_secs: u64,
 }
 
 /// Handles all rendering responsibilities for the game
@@ -182,7 +183,7 @@ impl GameRenderer {
             }
         }
 
-        // Stats overlay at the top
+        // Stats overlay at the top - left side
         let stats_left = Line::from(vec![
             Span::styled("Score: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
@@ -238,6 +239,28 @@ impl GameRenderer {
 
         frame.render_widget(Paragraph::new(stats_left), stats_area);
 
+        // Timer in center of header
+        let minutes = view.elapsed_time_secs / 60;
+        let seconds = view.elapsed_time_secs % 60;
+        let timer_text = Line::from(vec![
+            Span::styled("Time: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                format!("{:02}:{:02}", minutes, seconds),
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]);
+
+        let timer_area = Rect {
+            x: area.x,
+            y: area.y,
+            width: area.width,
+            height: 1,
+        };
+
+        frame.render_widget(Paragraph::new(timer_text).centered(), timer_area);
+
         // Controls hint at bottom
         let controls = Line::from(vec![Span::styled(
             "[WASD/Arrows: Move] [Space: Fire] [P: Pause] [Q: Quit]",
@@ -289,6 +312,9 @@ impl GameRenderer {
     /// Renders the game over screen
     fn render_game_over(&self, frame: &mut Frame, view: &RenderView) {
         let area = view.area;
+        let minutes = view.elapsed_time_secs / 60;
+        let seconds = view.elapsed_time_secs % 60;
+
         let game_over_text = vec![
             Line::from(""),
             Line::from("╔═══════════════════════════╗").centered().red(),
@@ -301,6 +327,10 @@ impl GameRenderer {
             Line::from(format!("Final Score: {}", view.score))
                 .centered()
                 .yellow()
+                .bold(),
+            Line::from(format!("Time Survived: {:02}:{:02}", minutes, seconds))
+                .centered()
+                .cyan()
                 .bold(),
             Line::from(""),
             Line::from("Press R to restart").centered().white(),
