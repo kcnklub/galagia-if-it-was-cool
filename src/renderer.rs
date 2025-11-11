@@ -221,7 +221,9 @@ impl GameRenderer {
                     game_area.x + pickup.x,
                     game_area.y + pickup.y,
                     pickup.get_char().to_string(),
-                    Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
                 );
             }
         }
