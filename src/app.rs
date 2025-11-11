@@ -3,6 +3,7 @@ use rand::Rng;
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::time::{Duration, Instant};
 
+use crate::audio::AudioManager;
 use crate::entities::{
     Enemy, EnemyType, Formation, FormationType, GameState, Particle, Pickup, Player, Projectile,
     ProjectileOwner, ProjectileType, WeaponType, create_explosion_particles,
@@ -37,6 +38,7 @@ pub struct App {
     /// internal components
     input_manager: InputManager,
     renderer: GameRenderer,
+    audio_manager: AudioManager,
 }
 
 impl App {
@@ -73,6 +75,7 @@ impl App {
             final_time_secs: None,
             input_manager: InputManager::new(),
             renderer: GameRenderer::new(),
+            audio_manager: AudioManager::default(),
         };
 
         // Spawn initial formation so player doesn't have to wait
@@ -180,6 +183,9 @@ impl App {
                 }
                 InputAction::Fire => {
                     let new_projectiles = self.player.try_fire();
+                    if !new_projectiles.is_empty() {
+                        self.audio_manager.play_fire_sound();
+                    }
                     self.projectiles.extend(new_projectiles);
                 }
             }
@@ -254,6 +260,7 @@ impl App {
                 let fire_y = enemy.y + enemy_height;
                 self.projectiles
                     .push(Projectile::new(fire_x, fire_y, ProjectileOwner::Enemy));
+                self.audio_manager.play_fire_sound_volume(0.05);
             }
         }
 

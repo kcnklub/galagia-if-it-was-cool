@@ -72,9 +72,9 @@ impl Player {
     pub fn reset_cooldown(&mut self) {
         // Different weapons have different fire rates
         self.fire_cooldown = match self.current_weapon {
-            WeaponType::BasicGun => 5,
-            WeaponType::Sword => 5,
-            WeaponType::Bug => 5,
+            WeaponType::BasicGun => 10,
+            WeaponType::Sword => 8,
+            WeaponType::Bug => 10,
             WeaponType::Bomber => 30, // Much slower fire rate for bomber (0.5 seconds)
         };
     }

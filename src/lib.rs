@@ -4,6 +4,7 @@ pub use entities::{
     ProjectileOwner, ProjectileType, WeaponType,
 };
 
+pub mod audio;
 pub mod entities;
 pub mod input;
 pub mod renderer;
