@@ -1,5 +1,5 @@
 use crate::entities::{
-    Enemy, EnemyType, GameState, Pickup, Player, Projectile, ProjectileOwner, ProjectileType,
+    Enemy, EnemyType, GameState, Particle, Pickup, Player, Projectile, ProjectileOwner, ProjectileType,
 };
 use rand::Rng;
 use ratatui::{
@@ -16,6 +16,7 @@ pub struct RenderView<'a> {
     pub player: &'a Player,
     pub enemies: &'a [Enemy],
     pub projectiles: &'a [Projectile],
+    pub particles: &'a [Particle],
     pub pickups: &'a [Pickup],
     pub score: u32,
     pub frame_count: u64,
@@ -167,6 +168,31 @@ impl GameRenderer {
                 frame.render_widget(
                     Paragraph::new(char.to_string()).style(Style::default().fg(color)),
                     proj_area,
+                );
+            }
+        }
+
+        // Render particles
+        for particle in view.particles {
+            if particle.x < game_area.width && particle.y < game_area.height {
+                let particle_area = Rect {
+                    x: game_area.x + particle.x,
+                    y: game_area.y + particle.y,
+                    width: 1,
+                    height: 1,
+                };
+                // Color particles based on their lifetime (fade effect)
+                let color = if particle.lifetime > 8 {
+                    Color::Red
+                } else if particle.lifetime > 4 {
+                    Color::LightRed
+                } else {
+                    Color::Yellow
+                };
+                frame.render_widget(
+                    Paragraph::new(particle.char.to_string())
+                        .style(Style::default().fg(color).add_modifier(Modifier::BOLD)),
+                    particle_area,
                 );
             }
         }

@@ -15,8 +15,8 @@ use std::time::{Duration, Instant};
 use std::{fs::OpenOptions, io::stdout};
 
 use entities::{
-    Enemy, EnemyType, Formation, FormationType, GameState, Pickup, Player, Projectile,
-    ProjectileOwner, ProjectileType, WeaponType,
+    Enemy, EnemyType, Formation, FormationType, GameState, Particle, Pickup, Player, Projectile,
+    ProjectileOwner, ProjectileType, WeaponType, create_explosion_particles,
 };
 use input::{InputAction, InputManager};
 use renderer::{GameRenderer, RenderView};
@@ -85,6 +85,7 @@ pub struct App {
     formations: Vec<Formation>,
     /// Projectiles (from player and enemies)
     projectiles: Vec<Projectile>,
+    particles: Vec<Particle>,
     pickups: Vec<Pickup>,
     score: u32,
     /// screen dimensions
@@ -124,6 +125,7 @@ impl App {
             enemies: Vec::new(),
             formations: Vec::new(),
             projectiles: Vec::new(),
+            particles: Vec::new(),
             pickups: Vec::new(),
             score: 0,
             frame_count: 0,
@@ -172,6 +174,7 @@ impl App {
                     player: &self.player,
                     enemies: &self.enemies,
                     projectiles: &self.projectiles,
+                    particles: &self.particles,
                     pickups: &self.pickups,
                     score: self.score,
                     frame_count: self.frame_count,
@@ -280,6 +283,14 @@ impl App {
         let game_area_width = self.screen_width.saturating_sub(self.edge_width * 2 + 2);
         self.projectiles
             .retain(|p| !p.is_out_of_bounds(0, game_area_width, self.screen_height));
+
+        // Update particles
+        for particle in &mut self.particles {
+            particle.update();
+        }
+
+        // Remove dead or out-of-bounds particles
+        self.particles.retain(|p| !p.is_dead() && !p.is_out_of_bounds(0, game_area_width, self.screen_height));
 
         // Update formations
         let game_area_width = self.screen_width.saturating_sub(self.edge_width * 2 + 2);
@@ -435,6 +446,10 @@ impl App {
                     const EXPLOSION_RADIUS: u16 = 8;
                     const EXPLOSION_DAMAGE: u8 = 25;
 
+                    // Create explosion particle effect
+                    let explosion_particles = create_explosion_particles(projectile.x, projectile.y);
+                    self.particles.extend(explosion_particles);
+
                     for (e_idx, enemy) in self.enemies.iter_mut().enumerate() {
                         // Calculate distance between explosion center and enemy center
                         let enemy_center_x = enemy.x + enemy.get_width() / 2;
@@ -448,6 +463,10 @@ impl App {
                             enemy.take_damage(EXPLOSION_DAMAGE);
 
                             if !enemy.is_alive() {
+                                // Create particles at enemy death location
+                                let death_particles = create_explosion_particles(enemy_center_x, enemy_center_y);
+                                self.particles.extend(death_particles);
+
                                 self.score += enemy.get_points();
                                 enemies_to_remove.push(e_idx);
                             }
@@ -472,6 +491,12 @@ impl App {
                         projectiles_to_remove.push(p_idx);
 
                         if !enemy.is_alive() {
+                            // Create particles at enemy death location
+                            let enemy_center_x = enemy.x + enemy_width / 2;
+                            let enemy_center_y = enemy.y + enemy_height / 2;
+                            let death_particles = create_explosion_particles(enemy_center_x, enemy_center_y);
+                            self.particles.extend(death_particles);
+
                             self.score += enemy.get_points();
                             enemies_to_remove.push(e_idx);
                         }
@@ -511,6 +536,12 @@ impl App {
                 && enemy.y < self.player.y + player_height
                 && enemy.y + enemy_height > self.player.y
             {
+                // Create particles at collision point
+                let enemy_center_x = enemy.x + enemy_width / 2;
+                let enemy_center_y = enemy.y + enemy_height / 2;
+                let collision_particles = create_explosion_particles(enemy_center_x, enemy_center_y);
+                self.particles.extend(collision_particles);
+
                 self.player.take_damage(20);
                 enemies_to_remove.push(e_idx);
             }
