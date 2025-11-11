@@ -251,7 +251,6 @@ impl App {
 
             enemy.update();
 
-            // Enemy fires occasionally
             if enemy.can_fire() && rand::rng().random_bool(0.3) {
                 let enemy_width = enemy.get_width();
                 let enemy_height = enemy.get_height();
@@ -260,7 +259,7 @@ impl App {
                 let fire_y = enemy.y + enemy_height;
                 self.projectiles
                     .push(Projectile::new(fire_x, fire_y, ProjectileOwner::Enemy));
-                self.audio_manager.play_fire_sound_volume(0.05);
+                self.audio_manager.play_fire_sound_volume(0.01);
             }
         }
 
