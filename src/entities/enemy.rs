@@ -16,6 +16,7 @@ pub struct Enemy {
     pub formation_id: Option<usize>,
     /// Offset from formation center
     pub formation_offset: (i16, i16),
+    pub damage_flash_frames: u8,
 }
 
 impl Enemy {
@@ -27,9 +28,9 @@ impl Enemy {
         offset: (i16, i16),
     ) -> Self {
         let health = match enemy_type {
-            EnemyType::Basic => 10,
-            EnemyType::Fast => 5,
-            EnemyType::Tank => 20,
+            EnemyType::Basic => 15,
+            EnemyType::Fast => 10,
+            EnemyType::Tank => 30,
         };
 
         Self {
@@ -40,10 +41,16 @@ impl Enemy {
             fire_cooldown: 0,
             formation_id: Some(formation_id),
             formation_offset: offset,
+            damage_flash_frames: 0,
         }
     }
 
     pub fn update(&mut self) {
+        // Update damage flash
+        if self.damage_flash_frames > 0 {
+            self.damage_flash_frames -= 1;
+        }
+
         // Enemies in formations don't move on their own - they follow the formation
         if self.formation_id.is_some() {
             self.fire_cooldown = self.fire_cooldown.wrapping_add(1);
@@ -90,6 +97,12 @@ impl Enemy {
 
     pub fn take_damage(&mut self, damage: u8) {
         self.health = self.health.saturating_sub(damage);
+        // Set flash timer to 10 frames (about 1/6 second at 60 FPS)
+        self.damage_flash_frames = 10;
+    }
+
+    pub fn is_flashing(&self) -> bool {
+        self.damage_flash_frames > 0
     }
 
     pub fn is_alive(&self) -> bool {
@@ -175,6 +188,30 @@ mod tests {
         enemy.update_formation_position(20, 15);
         assert_eq!(enemy.x, 12);
         assert_eq!(enemy.y, 13);
+    }
+
+    #[test]
+    fn test_enemy_damage_flash() {
+        let mut enemy = Enemy::new_in_formation(10, 10, EnemyType::Basic, 0, (0, 0));
+        assert!(!enemy.is_flashing());
+        assert_eq!(enemy.damage_flash_frames, 0);
+
+        // Take damage should trigger flash
+        enemy.take_damage(5);
+        assert!(enemy.is_flashing());
+        assert_eq!(enemy.damage_flash_frames, 10);
+
+        // Flash should decrease with updates
+        enemy.update();
+        assert_eq!(enemy.damage_flash_frames, 9);
+        assert!(enemy.is_flashing());
+
+        // Flash should eventually stop
+        for _ in 0..9 {
+            enemy.update();
+        }
+        assert_eq!(enemy.damage_flash_frames, 0);
+        assert!(!enemy.is_flashing());
     }
 
     // Property-based tests

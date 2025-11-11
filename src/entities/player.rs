@@ -26,6 +26,7 @@ pub struct Player {
     pub health: u8,
     pub fire_cooldown: u8,
     pub current_weapon: WeaponType,
+    pub damage_flash_frames: u8,
 }
 
 impl Player {
@@ -36,6 +37,7 @@ impl Player {
             health: 100,
             fire_cooldown: 0,
             current_weapon: WeaponType::BasicGun,
+            damage_flash_frames: 0,
         }
     }
 
@@ -81,10 +83,19 @@ impl Player {
         if self.fire_cooldown > 0 {
             self.fire_cooldown -= 1;
         }
+        if self.damage_flash_frames > 0 {
+            self.damage_flash_frames -= 1;
+        }
     }
 
     pub fn take_damage(&mut self, damage: u8) {
         self.health = self.health.saturating_sub(damage);
+        // Set flash timer to 10 frames (about 1/6 second at 60 FPS)
+        self.damage_flash_frames = 10;
+    }
+
+    pub fn is_flashing(&self) -> bool {
+        self.damage_flash_frames > 0
     }
 
     pub fn is_alive(&self) -> bool {
@@ -305,6 +316,30 @@ mod tests {
         player.try_fire();
         let projectiles = player.try_fire();
         assert_eq!(projectiles.len(), 0);
+    }
+
+    #[test]
+    fn test_player_damage_flash() {
+        let mut player = Player::new(10, 10);
+        assert!(!player.is_flashing());
+        assert_eq!(player.damage_flash_frames, 0);
+
+        // Take damage should trigger flash
+        player.take_damage(10);
+        assert!(player.is_flashing());
+        assert_eq!(player.damage_flash_frames, 10);
+
+        // Flash should decrease with updates
+        player.update_cooldown();
+        assert_eq!(player.damage_flash_frames, 9);
+        assert!(player.is_flashing());
+
+        // Flash should eventually stop
+        for _ in 0..9 {
+            player.update_cooldown();
+        }
+        assert_eq!(player.damage_flash_frames, 0);
+        assert!(!player.is_flashing());
     }
 
     // Property-based tests

@@ -93,6 +93,12 @@ impl GameRenderer {
         if view.player.is_alive() {
             let sprite_lines = view.player.get_sprite_lines();
             let player_width = view.player.get_width();
+            // Flash white when taking damage, otherwise green
+            let player_color = if view.player.is_flashing() {
+                Color::White
+            } else {
+                Color::Green
+            };
 
             for (i, line) in sprite_lines.iter().enumerate() {
                 let y_pos = view.player.y + i as u16;
@@ -106,7 +112,7 @@ impl GameRenderer {
                     frame.render_widget(
                         Paragraph::new(*line).style(
                             Style::default()
-                                .fg(Color::Green)
+                                .fg(player_color)
                                 .add_modifier(Modifier::BOLD),
                         ),
                         player_area,
@@ -119,10 +125,15 @@ impl GameRenderer {
         for enemy in view.enemies {
             let sprite_lines = enemy.get_sprite_lines();
             let enemy_width = enemy.get_width();
-            let color = match enemy.enemy_type {
-                EnemyType::Basic => Color::Red,
-                EnemyType::Fast => Color::Magenta,
-                EnemyType::Tank => Color::Yellow,
+            // Flash white when taking damage, otherwise use normal color
+            let color = if enemy.is_flashing() {
+                Color::White
+            } else {
+                match enemy.enemy_type {
+                    EnemyType::Basic => Color::Red,
+                    EnemyType::Fast => Color::Magenta,
+                    EnemyType::Tank => Color::Yellow,
+                }
             };
 
             for (i, line) in sprite_lines.iter().enumerate() {
