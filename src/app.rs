@@ -250,7 +250,7 @@ impl App {
 
             enemy.update();
 
-            if enemy.can_fire() && rand::rng().random_bool(0.3) {
+            if enemy.can_fire() && rand::rng().random_bool(0.1) {  // Reduced from 0.3 to 0.1 (10% chance)
                 let enemy_width = enemy.get_width();
                 let enemy_height = enemy.get_height();
                 // Fire from the center bottom of the enemy sprite

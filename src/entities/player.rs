@@ -107,11 +107,11 @@ impl Player {
     }
 
     pub fn get_width(&self) -> u16 {
-        5
+        15
     }
 
     pub fn get_height(&self) -> u16 {
-        3
+        10
     }
 
     /// Attempts to fire projectile(s) if cooldown allows

@@ -92,7 +92,7 @@ impl Enemy {
     }
 
     pub fn can_fire(&self) -> bool {
-        self.fire_cooldown.is_multiple_of(30)
+        self.fire_cooldown.is_multiple_of(120)  // Increased from 30 to 120 (2 seconds at 60 FPS)
     }
 
     pub fn take_damage(&mut self, damage: u8) {
@@ -118,11 +118,19 @@ impl Enemy {
     }
 
     pub fn get_width(&self) -> u16 {
-        7
+        match self.enemy_type {
+            EnemyType::Basic => 7,
+            EnemyType::Fast => 8,  // Sprite size for dark-fighter
+            EnemyType::Tank => 8,  // Sprite size for dark-tanker
+        }
     }
 
     pub fn get_height(&self) -> u16 {
-        3
+        match self.enemy_type {
+            EnemyType::Basic => 3,
+            EnemyType::Fast => 5,  // Sprite size for dark-fighter
+            EnemyType::Tank => 5,  // Sprite size for dark-tanker
+        }
     }
 
     pub fn get_points(&self) -> u32 {

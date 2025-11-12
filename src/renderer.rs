@@ -10,6 +10,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
+use ratatui_image::{StatefulImage, picker::Picker, protocol::StatefulProtocol};
 
 /// View struct that holds all game state needed for rendering
 pub struct RenderView<'a> {
@@ -29,7 +30,9 @@ pub struct RenderView<'a> {
 
 /// Handles all rendering responsibilities for the game
 pub struct GameRenderer {
-    // Future: could add theme/config fields here
+    ship_image: StatefulProtocol,
+    dark_fighter_image: StatefulProtocol,
+    dark_tanker_image: StatefulProtocol,
 }
 
 impl Default for GameRenderer {
@@ -41,11 +44,32 @@ impl Default for GameRenderer {
 impl GameRenderer {
     /// Creates a new GameRenderer
     pub fn new() -> Self {
-        Self {}
+        // Create the image protocol picker
+        let picker = Picker::from_query_stdio().expect("Failed to create picker");
+
+        // Load the ship image
+        let ship_img = image::open("assests/sprites/ship.png").expect("Failed to load ship.png");
+        let ship_image = picker.new_resize_protocol(ship_img);
+
+        // Load the dark fighter image (Fast enemy)
+        let fighter_img = image::open("assests/sprites/dark-fighter.png")
+            .expect("Failed to load dark-fighter.png");
+        let dark_fighter_image = picker.new_resize_protocol(fighter_img);
+
+        // Load the dark tanker image (Tank enemy)
+        let tanker_img =
+            image::open("assests/sprites/dark-tanker.png").expect("Failed to load dark-tanker.png");
+        let dark_tanker_image = picker.new_resize_protocol(tanker_img);
+
+        Self {
+            ship_image,
+            dark_fighter_image,
+            dark_tanker_image,
+        }
     }
 
     /// Main render method that dispatches to state-specific renderers
-    pub fn render(&self, frame: &mut Frame, view: &RenderView) {
+    pub fn render(&mut self, frame: &mut Frame, view: &RenderView) {
         match view.game_state {
             GameState::Playing => self.render_game(frame, view),
             GameState::Paused => self.render_paused(frame, view),
@@ -54,7 +78,7 @@ impl GameRenderer {
     }
 
     /// Renders the active gameplay screen
-    fn render_game(&self, frame: &mut Frame, view: &RenderView) {
+    fn render_game(&mut self, frame: &mut Frame, view: &RenderView) {
         let area = view.area;
 
         // Create a narrower centered game area with borders
@@ -95,79 +119,83 @@ impl GameRenderer {
             );
         }
 
-        // Render player - optimized with batched multi-line rendering
+        // Render player - using ship.png image
         if view.player.is_alive() {
-            let sprite_lines = view.player.get_sprite_lines();
             let player_width = view.player.get_width();
-            // Flash white when taking damage, otherwise green
-            let player_color = if view.player.is_flashing() {
-                Color::White
-            } else {
-                Color::Green
-            };
-
-            // Build multi-line text with consistent styling
-            let text: Vec<Line> = sprite_lines
-                .iter()
-                .map(|line| {
-                    Line::from(*line).style(
-                        Style::default()
-                            .fg(player_color)
-                            .add_modifier(Modifier::BOLD),
-                    )
-                })
-                .collect();
+            let player_height = view.player.get_height();
 
             let player_area = Rect {
                 x: game_area.x + view.player.x,
                 y: game_area.y + view.player.y,
                 width: player_width,
-                height: sprite_lines.len() as u16,
+                height: player_height,
             };
 
-            // Single widget call for entire player sprite
-            if view.player.y + sprite_lines.len() as u16 <= game_area.height
+            // Render the ship image if it fits in the game area
+            if view.player.y + player_height <= game_area.height
                 && view.player.x + player_width < game_area.width
             {
-                frame.render_widget(Paragraph::new(text), player_area);
+                // Render the ship image using StatefulImage widget
+                let image_widget = StatefulImage::default();
+                frame.render_stateful_widget(image_widget, player_area, &mut self.ship_image);
             }
         }
 
-        // Render enemies - optimized with batched multi-line rendering
+        // Render enemies - use sprites for Fast and Tank, ASCII for Basic
         for enemy in view.enemies {
-            let sprite_lines = enemy.get_sprite_lines();
             let enemy_width = enemy.get_width();
-            // Flash white when taking damage, otherwise use normal color
-            let color = if enemy.is_flashing() {
-                Color::White
-            } else {
-                match enemy.enemy_type {
-                    EnemyType::Basic => Color::Red,
-                    EnemyType::Fast => Color::Magenta,
-                    EnemyType::Tank => Color::Yellow,
-                }
-            };
-
-            // Build multi-line text with consistent styling
-            let text: Vec<Line> = sprite_lines
-                .iter()
-                .map(|line| {
-                    Line::from(*line).style(Style::default().fg(color).add_modifier(Modifier::BOLD))
-                })
-                .collect();
+            let enemy_height = enemy.get_height();
 
             let enemy_area = Rect {
                 x: game_area.x + enemy.x,
                 y: game_area.y + enemy.y,
                 width: enemy_width,
-                height: sprite_lines.len() as u16,
+                height: enemy_height,
             };
 
-            // Single widget call for entire enemy sprite
-            if enemy.y + sprite_lines.len() as u16 <= game_area.height
-                && enemy.x + enemy_width < game_area.width
+            // Check if enemy fits in game area
+            if enemy.y + enemy_height <= game_area.height && enemy.x + enemy_width < game_area.width
             {
-                frame.render_widget(Paragraph::new(text), enemy_area);
+                match enemy.enemy_type {
+                    EnemyType::Fast => {
+                        // Render dark fighter sprite
+                        let image_widget = StatefulImage::default();
+                        frame.render_stateful_widget(
+                            image_widget,
+                            enemy_area,
+                            &mut self.dark_fighter_image,
+                        );
+                    }
+                    EnemyType::Tank => {
+                        // Render dark tanker sprite
+                        let image_widget = StatefulImage::default();
+                        frame.render_stateful_widget(
+                            image_widget,
+                            enemy_area,
+                            &mut self.dark_tanker_image,
+                        );
+                    }
+                    EnemyType::Basic => {
+                        // Use ASCII rendering for Basic enemies
+                        let sprite_lines = enemy.get_sprite_lines();
+                        let color = if enemy.is_flashing() {
+                            Color::White
+                        } else {
+                            Color::Red
+                        };
+
+                        let text: Vec<Line> = sprite_lines
+                            .iter()
+                            .map(|line| {
+                                Line::from(*line).style(
+                                    Style::default().fg(color).add_modifier(Modifier::BOLD),
+                                )
+                            })
+                            .collect();
+
+                        frame.render_widget(Paragraph::new(text), enemy_area);
+                    }
+                }
             }
         }
 
@@ -329,7 +357,7 @@ impl GameRenderer {
     }
 
     /// Renders the pause screen with overlay
-    fn render_paused(&self, frame: &mut Frame, view: &RenderView) {
+    fn render_paused(&mut self, frame: &mut Frame, view: &RenderView) {
         // First render the game screen
         self.render_game(frame, view);
 
