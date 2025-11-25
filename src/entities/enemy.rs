@@ -3,6 +3,9 @@ pub enum EnemyType {
     Basic,
     Fast,
     Tank,
+    Sniper,
+    Spinner,
+    Charger,
 }
 
 #[derive(Debug, Clone)]
@@ -31,6 +34,9 @@ impl Enemy {
             EnemyType::Basic => 15,
             EnemyType::Fast => 10,
             EnemyType::Tank => 30,
+            EnemyType::Sniper => 8,
+            EnemyType::Spinner => 18,
+            EnemyType::Charger => 25,
         };
 
         Self {
@@ -62,6 +68,9 @@ impl Enemy {
             EnemyType::Basic => 1,
             EnemyType::Fast => 1,
             EnemyType::Tank => 1,
+            EnemyType::Sniper => 1,
+            EnemyType::Spinner => 1,
+            EnemyType::Charger => 1,
         };
 
         // Move down every few frames - slowed down significantly
@@ -69,6 +78,9 @@ impl Enemy {
             EnemyType::Basic => 8, // Move every 8 frames
             EnemyType::Fast => 5,  // Move every 5 frames (still faster)
             EnemyType::Tank => 10, // Move every 10 frames (slowest)
+            EnemyType::Sniper => 9,
+            EnemyType::Spinner => 8,
+            EnemyType::Charger => 6,
         };
 
         if self.fire_cooldown.is_multiple_of(move_interval) {
@@ -114,6 +126,9 @@ impl Enemy {
             EnemyType::Basic => vec!["  \\|/  ", " {===} ", "  /_\\  "],
             EnemyType::Fast => vec!["  <*>  ", " <|||> ", "  <*>  "],
             EnemyType::Tank => vec![" [===] ", " |###| ", " [===] "],
+            EnemyType::Sniper => vec!["  ^|^  ", "  |o|  ", "  '|'  "],
+            EnemyType::Spinner => vec!["  (@)  ", " /@|@\\ ", "  (@)  "],
+            EnemyType::Charger => vec![" \\ V / ", "  \\V/  ", "   V   "],
         }
     }
 
@@ -122,6 +137,9 @@ impl Enemy {
             EnemyType::Basic => 7,
             EnemyType::Fast => 8,  // Sprite size for dark-fighter
             EnemyType::Tank => 8,  // Sprite size for dark-tanker
+            EnemyType::Sniper => 7,
+            EnemyType::Spinner => 7,
+            EnemyType::Charger => 7,
         }
     }
 
@@ -130,6 +148,9 @@ impl Enemy {
             EnemyType::Basic => 3,
             EnemyType::Fast => 5,  // Sprite size for dark-fighter
             EnemyType::Tank => 5,  // Sprite size for dark-tanker
+            EnemyType::Sniper => 3,
+            EnemyType::Spinner => 3,
+            EnemyType::Charger => 3,
         }
     }
 
@@ -138,6 +159,9 @@ impl Enemy {
             EnemyType::Basic => 10,
             EnemyType::Fast => 20,
             EnemyType::Tank => 30,
+            EnemyType::Sniper => 40,
+            EnemyType::Spinner => 50,
+            EnemyType::Charger => 60,
         }
     }
 }
@@ -168,6 +192,27 @@ mod tests {
 
         let tank = Enemy::new_in_formation(10, 10, EnemyType::Tank, 0, (0, 0));
         assert_eq!(tank.get_points(), 30);
+
+        let sniper = Enemy::new_in_formation(10, 10, EnemyType::Sniper, 0, (0, 0));
+        assert_eq!(sniper.get_points(), 40);
+
+        let spinner = Enemy::new_in_formation(10, 10, EnemyType::Spinner, 0, (0, 0));
+        assert_eq!(spinner.get_points(), 50);
+
+        let charger = Enemy::new_in_formation(10, 10, EnemyType::Charger, 0, (0, 0));
+        assert_eq!(charger.get_points(), 60);
+    }
+
+    #[test]
+    fn test_new_enemy_types_health() {
+        let sniper = Enemy::new_in_formation(10, 10, EnemyType::Sniper, 0, (0, 0));
+        assert_eq!(sniper.health, 8);
+
+        let spinner = Enemy::new_in_formation(10, 10, EnemyType::Spinner, 0, (0, 0));
+        assert_eq!(spinner.health, 18);
+
+        let charger = Enemy::new_in_formation(10, 10, EnemyType::Charger, 0, (0, 0));
+        assert_eq!(charger.health, 25);
     }
 
     #[test]
