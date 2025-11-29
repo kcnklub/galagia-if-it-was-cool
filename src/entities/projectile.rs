@@ -10,6 +10,8 @@ pub enum ProjectileType {
     Slash,
     BugShot,
     BomberProjectile,
+    SniperShot,
+    Tracker,
 }
 
 #[derive(Debug, Clone)]
@@ -109,7 +111,12 @@ impl Projectile {
                     }
                 }
                 ProjectileOwner::Enemy => {
-                    self.y += 1;
+                    let speed = if self.projectile_type == ProjectileType::SniperShot {
+                        2 // Sniper shot moves 2x speed
+                    } else {
+                        1
+                    };
+                    self.y += speed;
                 }
             }
         }

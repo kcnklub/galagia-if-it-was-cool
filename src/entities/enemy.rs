@@ -3,6 +3,20 @@ pub enum EnemyType {
     Basic,
     Fast,
     Tank,
+    Sniper,
+    Spinner,
+    Charger,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MovementState {
+    Descending,
+    ZigzagLeft,
+    ZigzagRight,
+    Strafing,
+    Circling,
+    Charging,
+    Paused,
 }
 
 #[derive(Debug, Clone)]
@@ -17,6 +31,12 @@ pub struct Enemy {
     /// Offset from formation center
     pub formation_offset: (i16, i16),
     pub damage_flash_frames: u8,
+    /// Current movement state for individual behavior
+    pub movement_state: MovementState,
+    /// Timer for movement pattern timing
+    pub movement_timer: u8,
+    /// Target x position for targeted movement
+    pub target_x: Option<u16>,
 }
 
 impl Enemy {
@@ -31,6 +51,9 @@ impl Enemy {
             EnemyType::Basic => 15,
             EnemyType::Fast => 10,
             EnemyType::Tank => 30,
+            EnemyType::Sniper => 8,
+            EnemyType::Spinner => 18,
+            EnemyType::Charger => 25,
         };
 
         Self {
@@ -42,6 +65,9 @@ impl Enemy {
             formation_id: Some(formation_id),
             formation_offset: offset,
             damage_flash_frames: 0,
+            movement_state: MovementState::Descending,
+            movement_timer: 0,
+            target_x: None,
         }
     }
 
@@ -57,25 +83,144 @@ impl Enemy {
             return;
         }
 
-        // Move down based on type (for non-formation enemies)
-        let speed = match self.enemy_type {
-            EnemyType::Basic => 1,
-            EnemyType::Fast => 1,
-            EnemyType::Tank => 1,
-        };
+        // Update movement timer
+        self.movement_timer = self.movement_timer.wrapping_add(1);
 
-        // Move down every few frames - slowed down significantly
-        let move_interval = match self.enemy_type {
-            EnemyType::Basic => 8, // Move every 8 frames
-            EnemyType::Fast => 5,  // Move every 5 frames (still faster)
-            EnemyType::Tank => 10, // Move every 10 frames (slowest)
-        };
-
-        if self.fire_cooldown.is_multiple_of(move_interval) {
-            self.y += speed;
+        // Execute movement pattern based on enemy type
+        match self.enemy_type {
+            EnemyType::Basic => self.update_basic_movement(),
+            EnemyType::Fast => self.update_fast_movement(),
+            EnemyType::Tank => self.update_tank_movement(),
+            EnemyType::Sniper => self.update_sniper_movement(),
+            EnemyType::Spinner => self.update_spinner_movement(),
+            EnemyType::Charger => self.update_charger_movement(),
         }
 
         self.fire_cooldown = self.fire_cooldown.wrapping_add(1);
+    }
+
+    fn update_basic_movement(&mut self) {
+        // Simple downward movement
+        if self.movement_timer.is_multiple_of(8) {
+            self.y += 1;
+        }
+    }
+
+    fn update_fast_movement(&mut self) {
+        // Zigzag pattern while descending
+        if self.movement_timer.is_multiple_of(5) {
+            self.y += 1;
+            
+            // Change horizontal direction every 20 frames
+            match self.movement_state {
+                MovementState::ZigzagLeft => {
+                    if self.x > 5 { self.x -= 1; }
+                    if self.movement_timer.is_multiple_of(20) {
+                        self.movement_state = MovementState::ZigzagRight;
+                    }
+                }
+                MovementState::ZigzagRight => {
+                    if self.x < 75 { self.x += 1; }
+                    if self.movement_timer.is_multiple_of(20) {
+                        self.movement_state = MovementState::ZigzagLeft;
+                    }
+                }
+                _ => self.movement_state = MovementState::ZigzagLeft,
+            }
+        }
+    }
+
+    fn update_tank_movement(&mut self) {
+        // Slow steady descent with occasional pauses
+        match self.movement_state {
+            MovementState::Paused => {
+                if self.movement_timer.is_multiple_of(30) {
+                    self.movement_state = MovementState::Descending;
+                }
+            }
+            MovementState::Descending => {
+                if self.movement_timer.is_multiple_of(10) {
+                    self.y += 1;
+                }
+                // Pause every 40 frames
+                if self.movement_timer.is_multiple_of(40) {
+                    self.movement_state = MovementState::Paused;
+                }
+            }
+            _ => self.movement_state = MovementState::Descending,
+        }
+    }
+
+    fn update_sniper_movement(&mut self) {
+        // Maintains distance, strafes horizontally
+        if self.movement_timer.is_multiple_of(9) {
+            self.y += 1;
+        }
+        
+        // Horizontal strafing
+        if self.movement_timer.is_multiple_of(6) {
+            match self.movement_state {
+                MovementState::Strafing => {
+                    if self.target_x.is_none() {
+                        // Pick a random target x position
+                        self.target_x = Some(20 + (self.movement_timer % 40) as u16);
+                    }
+                    
+                    if let Some(target) = self.target_x {
+                        if self.x < target {
+                            self.x += 1;
+                        } else if self.x > target {
+                            self.x -= 1;
+                        } else {
+                            // Reached target, pick new one
+                            self.target_x = Some(20 + (self.movement_timer % 40) as u16);
+                        }
+                    }
+                }
+                _ => self.movement_state = MovementState::Strafing,
+            }
+        }
+    }
+
+    fn update_spinner_movement(&mut self) {
+        // Circular/spiral movement pattern
+        if self.movement_timer.is_multiple_of(8) {
+            self.y += 1;
+        }
+        
+        // Circular motion
+        let angle = (self.movement_timer as f32 * 0.1) % (2.0 * std::f32::consts::PI);
+        let radius = 3.0;
+        let dx = (angle.cos() * radius) as i16;
+        
+        if self.movement_timer.is_multiple_of(3) {
+            let new_x = self.x as i16 + dx;
+            if (5..=75).contains(&new_x) {
+                self.x = new_x as u16;
+            }
+        }
+    }
+
+    fn update_charger_movement(&mut self) {
+        // Brief acceleration toward player when aligned
+        if self.movement_timer.is_multiple_of(6) {
+            self.y += 1;
+        }
+        
+        // Check if aligned with player (simplified - would need player position)
+        // For now, charge periodically
+        if self.movement_timer.is_multiple_of(60) {
+            self.movement_state = MovementState::Charging;
+        }
+        
+        if self.movement_state == MovementState::Charging {
+            // Rapid descent for 10 frames
+            if !self.movement_timer.is_multiple_of(10) {
+                self.y += 2; // Double speed during charge
+            } else {
+                self.movement_state = MovementState::Descending;
+            }
+        }
     }
 
     /// Update position based on formation center
@@ -114,6 +259,9 @@ impl Enemy {
             EnemyType::Basic => vec!["  \\|/  ", " {===} ", "  /_\\  "],
             EnemyType::Fast => vec!["  <*>  ", " <|||> ", "  <*>  "],
             EnemyType::Tank => vec![" [===] ", " |###| ", " [===] "],
+            EnemyType::Sniper => vec!["  ^|^  ", "  |o|  ", "  '|'  "],
+            EnemyType::Spinner => vec!["  (@)  ", " /@|@\\ ", "  (@)  "],
+            EnemyType::Charger => vec![" \\ V / ", "  \\V/  ", "   V   "],
         }
     }
 
@@ -122,6 +270,9 @@ impl Enemy {
             EnemyType::Basic => 7,
             EnemyType::Fast => 8,  // Sprite size for dark-fighter
             EnemyType::Tank => 8,  // Sprite size for dark-tanker
+            EnemyType::Sniper => 7,
+            EnemyType::Spinner => 7,
+            EnemyType::Charger => 7,
         }
     }
 
@@ -130,6 +281,9 @@ impl Enemy {
             EnemyType::Basic => 3,
             EnemyType::Fast => 5,  // Sprite size for dark-fighter
             EnemyType::Tank => 5,  // Sprite size for dark-tanker
+            EnemyType::Sniper => 3,
+            EnemyType::Spinner => 3,
+            EnemyType::Charger => 3,
         }
     }
 
@@ -138,6 +292,9 @@ impl Enemy {
             EnemyType::Basic => 10,
             EnemyType::Fast => 20,
             EnemyType::Tank => 30,
+            EnemyType::Sniper => 40,
+            EnemyType::Spinner => 50,
+            EnemyType::Charger => 60,
         }
     }
 }
@@ -168,6 +325,27 @@ mod tests {
 
         let tank = Enemy::new_in_formation(10, 10, EnemyType::Tank, 0, (0, 0));
         assert_eq!(tank.get_points(), 30);
+
+        let sniper = Enemy::new_in_formation(10, 10, EnemyType::Sniper, 0, (0, 0));
+        assert_eq!(sniper.get_points(), 40);
+
+        let spinner = Enemy::new_in_formation(10, 10, EnemyType::Spinner, 0, (0, 0));
+        assert_eq!(spinner.get_points(), 50);
+
+        let charger = Enemy::new_in_formation(10, 10, EnemyType::Charger, 0, (0, 0));
+        assert_eq!(charger.get_points(), 60);
+    }
+
+    #[test]
+    fn test_new_enemy_types_health() {
+        let sniper = Enemy::new_in_formation(10, 10, EnemyType::Sniper, 0, (0, 0));
+        assert_eq!(sniper.health, 8);
+
+        let spinner = Enemy::new_in_formation(10, 10, EnemyType::Spinner, 0, (0, 0));
+        assert_eq!(spinner.health, 18);
+
+        let charger = Enemy::new_in_formation(10, 10, EnemyType::Charger, 0, (0, 0));
+        assert_eq!(charger.health, 25);
     }
 
     #[test]
@@ -220,6 +398,49 @@ mod tests {
         }
         assert_eq!(enemy.damage_flash_frames, 0);
         assert!(!enemy.is_flashing());
+    }
+
+    #[test]
+    fn test_enemy_movement_state_initialization() {
+        let enemy = Enemy::new_in_formation(10, 10, EnemyType::Fast, 0, (0, 0));
+        assert_eq!(enemy.movement_state, MovementState::Descending);
+        assert_eq!(enemy.movement_timer, 0);
+        assert_eq!(enemy.target_x, None);
+    }
+
+    #[test]
+    fn test_fast_enemy_zigzag_movement() {
+        let mut enemy = Enemy::new_in_formation(40, 10, EnemyType::Fast, 0, (0, 0));
+        enemy.formation_id = None; // Remove from formation to test individual movement
+        
+        let initial_x = enemy.x;
+        
+        // Update enough times to see zigzag pattern
+        for _ in 0..25 {
+            enemy.update();
+        }
+        
+        // Enemy should have moved horizontally from zigzag pattern
+        assert_ne!(enemy.x, initial_x);
+        // Should be in either zigzag state (direction may have changed)
+        assert!(matches!(enemy.movement_state, MovementState::ZigzagLeft | MovementState::ZigzagRight));
+    }
+
+    #[test]
+    fn test_tank_enemy_pause_behavior() {
+        let mut enemy = Enemy::new_in_formation(40, 10, EnemyType::Tank, 0, (0, 0));
+        enemy.formation_id = None; // Remove from formation to test individual movement
+        
+        let initial_y = enemy.y;
+        
+        // Update to trigger pause state
+        for _ in 0..40 {
+            enemy.update();
+        }
+        
+        // Should have paused at some point
+        assert_eq!(enemy.movement_state, MovementState::Paused);
+        assert!(enemy.y > initial_y); // Should have moved down some
     }
 
     // Property-based tests

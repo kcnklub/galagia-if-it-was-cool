@@ -175,8 +175,8 @@ impl GameRenderer {
                             &mut self.dark_tanker_image,
                         );
                     }
-                    EnemyType::Basic => {
-                        // Use ASCII rendering for Basic enemies
+                    EnemyType::Basic | EnemyType::Sniper | EnemyType::Spinner | EnemyType::Charger => {
+                        // Use ASCII rendering for Basic and new enemies
                         let sprite_lines = enemy.get_sprite_lines();
                         let color = if enemy.is_flashing() {
                             Color::White
@@ -215,6 +215,8 @@ impl GameRenderer {
                             ('O', Color::LightRed)
                         }
                     }
+                    (ProjectileType::SniperShot, ProjectileOwner::Player) => ('^', Color::Cyan),
+                    (ProjectileType::Tracker, ProjectileOwner::Player) => ('*', Color::Green),
                     (_, ProjectileOwner::Enemy) => ('!', Color::Magenta),
                 };
 

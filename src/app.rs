@@ -216,6 +216,17 @@ impl App {
 
         // Update projectiles
         for projectile in &mut self.projectiles {
+            // Update tracker projectiles (homing behavior)
+            if projectile.projectile_type == ProjectileType::Tracker && projectile.owner == ProjectileOwner::Enemy {
+                // Move towards player x
+                if projectile.x < self.player.x {
+                    projectile.velocity_x = 1;
+                } else if projectile.x > self.player.x {
+                    projectile.velocity_x = -1;
+                } else {
+                    projectile.velocity_x = 0;
+                }
+            }
             projectile.update();
         }
 
@@ -256,8 +267,74 @@ impl App {
                 // Fire from the center bottom of the enemy sprite
                 let fire_x = enemy.x + enemy_width / 2;
                 let fire_y = enemy.y + enemy_height;
-                self.projectiles
-                    .push(Projectile::new(fire_x, fire_y, ProjectileOwner::Enemy));
+
+                match enemy.enemy_type {
+                    EnemyType::Sniper => {
+                        // Sniper fires fast vertical shot
+                        self.projectiles.push(Projectile::new_with_type(
+                            fire_x,
+                            fire_y,
+                            ProjectileOwner::Enemy,
+                            ProjectileType::SniperShot,
+                            0,
+                            None,
+                        ));
+                        // Sniper shot is faster, so we might want to give it a velocity boost or handle it in projectile update
+                        // For now, let's just say it's a regular projectile but we'll make it move faster in projectile.rs if needed
+                        // Actually, let's use velocity_y logic in projectile.rs or just spawn a specific type that moves faster.
+                        // Wait, Projectile struct doesn't have velocity_y.
+                        // Let's just spawn a normal projectile for now, but maybe we can add a speed modifier later.
+                        // Or better, let's use the existing update loop to make SniperShot move faster.
+                        // We can do this by updating it multiple times or adding a speed field.
+                        // For simplicity, let's just let it be a normal shot for now, but visually distinct.
+                        // actually, let's make it move faster by updating it twice in the loop? No that's hacky.
+                        // Let's just stick to the plan: "High speed vertical projectile".
+                        // We can implement speed in Projectile::update based on type.
+                    }
+                    EnemyType::Spinner => {
+                        // Spinner fires 3 bullets in a spread
+                        self.projectiles.push(Projectile::new_with_type(
+                            fire_x,
+                            fire_y,
+                            ProjectileOwner::Enemy,
+                            ProjectileType::Bullet,
+                            -1, // Left
+                            None,
+                        ));
+                        self.projectiles.push(Projectile::new_with_type(
+                            fire_x,
+                            fire_y,
+                            ProjectileOwner::Enemy,
+                            ProjectileType::Bullet,
+                            0, // Center
+                            None,
+                        ));
+                        self.projectiles.push(Projectile::new_with_type(
+                            fire_x,
+                            fire_y,
+                            ProjectileOwner::Enemy,
+                            ProjectileType::Bullet,
+                            1, // Right
+                            None,
+                        ));
+                    }
+                    EnemyType::Charger => {
+                         // Charger fires Tracker
+                        self.projectiles.push(Projectile::new_with_type(
+                            fire_x,
+                            fire_y,
+                            ProjectileOwner::Enemy,
+                            ProjectileType::Tracker,
+                            0, // Velocity X will be updated by tracker logic
+                            None,
+                        ));
+                    }
+                    _ => {
+                        // Basic, Fast, Tank fire normal bullets
+                        self.projectiles
+                            .push(Projectile::new(fire_x, fire_y, ProjectileOwner::Enemy));
+                    }
+                }
                 self.audio_manager.play_fire_sound_volume(0.01);
             }
         }
@@ -326,10 +403,13 @@ impl App {
 
         // Get positions and create enemies
         let positions = formation.get_positions();
-        let enemy_type = match rng.random_range(0..10) {
-            0..=6 => EnemyType::Basic,
-            7..=8 => EnemyType::Fast,
-            _ => EnemyType::Tank,
+        let enemy_type = match rng.random_range(0..6) {
+            0 => EnemyType::Basic,
+            1 => EnemyType::Fast,
+            2 => EnemyType::Tank,
+            3 => EnemyType::Sniper,
+            4 => EnemyType::Spinner,
+            _ => EnemyType::Charger,
         };
 
         for offset in positions {
