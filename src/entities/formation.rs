@@ -6,6 +6,14 @@ pub enum FormationType {
     Block,   // Dense rectangular block
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum FormationPattern {
+    Sweep,       // Current sweep + downward movement
+    Rotate,      // Rotating movement
+    Wave,        // Wave-like undulation
+    Choreographed, // Complex choreographed patterns
+}
+
 #[derive(Debug, Clone)]
 pub struct Formation {
     /// Center X position of the formation
@@ -20,10 +28,21 @@ pub struct Formation {
     pub frame_counter: u16,
     /// Indices of enemies in this formation
     pub enemy_indices: Vec<usize>,
+    /// Movement pattern for this formation
+    pub movement_pattern: FormationPattern,
+    /// Timer for pattern-specific behavior
+    pub pattern_timer: u16,
 }
 
 impl Formation {
     pub fn new(center_x: u16, center_y: u16, formation_type: FormationType) -> Self {
+        let movement_pattern = match formation_type {
+            FormationType::VShape => FormationPattern::Sweep,
+            FormationType::Diamond => FormationPattern::Rotate,
+            FormationType::Wall => FormationPattern::Wave,
+            FormationType::Block => FormationPattern::Choreographed,
+        };
+
         Self {
             center_x,
             center_y,
@@ -31,6 +50,8 @@ impl Formation {
             direction_x: 1, // Start moving right
             frame_counter: 0,
             enemy_indices: Vec::new(),
+            movement_pattern,
+            pattern_timer: 0,
         }
     }
 
@@ -106,7 +127,19 @@ impl Formation {
 
     pub fn update(&mut self, max_x: u16) {
         self.frame_counter += 1;
+        self.pattern_timer += 1;
 
+        // Execute movement pattern based on formation type
+        match self.movement_pattern {
+            FormationPattern::Sweep => self.update_sweep_pattern(max_x),
+            FormationPattern::Rotate => self.update_rotate_pattern(max_x),
+            FormationPattern::Wave => self.update_wave_pattern(max_x),
+            FormationPattern::Choreographed => self.update_choreographed_pattern(max_x),
+        }
+    }
+
+    fn update_sweep_pattern(&mut self, max_x: u16) {
+        // Original sweep pattern
         // Move formation down every 8 frames
         if self.frame_counter.is_multiple_of(8) {
             self.center_y += 1;
@@ -131,6 +164,59 @@ impl Formation {
             } else {
                 // Hit edge, reverse direction
                 self.direction_x = -self.direction_x;
+            }
+        }
+    }
+
+    fn update_rotate_pattern(&mut self, max_x: u16) {
+        // Rotating movement pattern
+        if self.frame_counter.is_multiple_of(8) {
+            self.center_y += 1;
+        }
+
+        // Circular motion
+        let angle = (self.pattern_timer as f32 * 0.05) % (2.0 * std::f32::consts::PI);
+        let radius = 10.0;
+        let dx = (angle.cos() * radius) as i16;
+        
+        if self.frame_counter.is_multiple_of(3) {
+            let new_x = 40 + dx; // Center around 40
+            if new_x >= 10 && new_x <= (max_x as i16 - 10) {
+                self.center_x = new_x as u16;
+            }
+        }
+    }
+
+    fn update_wave_pattern(&mut self, max_x: u16) {
+        // Wave-like undulation
+        if self.frame_counter.is_multiple_of(8) {
+            self.center_y += 1;
+        }
+
+        // Sinusoidal horizontal movement
+        let wave_offset = (self.pattern_timer as f32 * 0.1).sin() * 15.0;
+        let new_x = 40 + wave_offset as i16;
+        
+        if new_x >= 10 && new_x <= (max_x as i16 - 10) {
+            self.center_x = new_x as u16;
+        }
+    }
+
+    fn update_choreographed_pattern(&mut self, max_x: u16) {
+        // Complex choreographed patterns
+        if self.frame_counter.is_multiple_of(8) {
+            self.center_y += 1;
+        }
+
+        // Figure-8 pattern
+        let t = self.pattern_timer as f32 * 0.05;
+        let scale = 12.0;
+        let dx = (t.sin() * scale) as i16;
+        
+        if self.frame_counter.is_multiple_of(3) {
+            let new_x = 40 + dx;
+            if new_x >= 10 && new_x <= (max_x as i16 - 10) {
+                self.center_x = new_x as u16;
             }
         }
     }
@@ -207,6 +293,45 @@ mod tests {
 
         // Should have reversed direction at some point
         assert_eq!(formation.direction_x, -1);
+    }
+
+    #[test]
+    fn test_formation_pattern_initialization() {
+        let v_formation = Formation::new(40, 10, FormationType::VShape);
+        assert_eq!(v_formation.movement_pattern, FormationPattern::Sweep);
+        
+        let diamond_formation = Formation::new(40, 10, FormationType::Diamond);
+        assert_eq!(diamond_formation.movement_pattern, FormationPattern::Rotate);
+        
+        let wall_formation = Formation::new(40, 10, FormationType::Wall);
+        assert_eq!(wall_formation.movement_pattern, FormationPattern::Wave);
+        
+        let block_formation = Formation::new(40, 10, FormationType::Block);
+        assert_eq!(block_formation.movement_pattern, FormationPattern::Choreographed);
+    }
+
+    #[test]
+    fn test_formation_pattern_timer_increments() {
+        let mut formation = Formation::new(40, 10, FormationType::VShape);
+        let initial_timer = formation.pattern_timer;
+        
+        formation.update(80);
+        
+        assert_eq!(formation.pattern_timer, initial_timer + 1);
+    }
+
+    #[test]
+    fn test_wave_formation_movement() {
+        let mut formation = Formation::new(40, 10, FormationType::Wall);
+        let initial_x = formation.center_x;
+        
+        // Update enough to see wave pattern
+        for _ in 0..20 {
+            formation.update(80);
+        }
+        
+        // Should have moved from wave pattern
+        assert_ne!(formation.center_x, initial_x);
     }
 
     // Property-based tests
