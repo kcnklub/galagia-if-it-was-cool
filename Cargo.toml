@@ -16,4 +16,4 @@ ratatui-image = "8.0"
 image = "0.25"
 
 [dev-dependencies]
-proptest = "1.5"
+proptest = "1.10"
